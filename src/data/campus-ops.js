@@ -15,7 +15,7 @@ export const CAMPUS_OPS = {
   },
   it: {
     networkCoreBuilding: 8,     // building that holds the main network equipment (assumed)
-    upsMinutes: 60,             // battery backup for the network core
+    upsMinutes: 30,             // battery backup for the network core (confirmed by CDS: ~30 minutes)
     // Internet circuits into campus. route: 'aerial' (on utility poles) or 'underground'.
     circuits: [
       { name: 'Primary internet (fiber)', route: 'aerial' },
@@ -33,5 +33,12 @@ export const CAMPUS_OPS = {
       { name: 'Biltmore Forest / Stuyvesant Rd', share: 0.2, road: 'Stuyvesant', side: 'west' },
     ],
     trafficSignalsHaveBackup: false,
+  },
+  decisions: {
+    // Confirmed by CDS: calls are made by 8 PM (for the next day) and 5:30 AM, using conditions and interstate
+    // weather cams within about 30 miles of campus.
+    eveningHour: 20,
+    morningHour: 5.5,
+    regionRadiusMi: 30,
   },
 };

@@ -147,6 +147,11 @@ export class CampusOps {
       if (r.signalsOut) roads.lines.push(`${r.signalsOut} of ${r.signalsTotal} traffic signals dark — treat as 4-way stops`);
       if (r.lowVis) roads.lines.push(`Visibility ${sim.visibilityMi().toFixed(2)} mi`);
       roads.familiesAffected = r.routes.reduce((s, x) => s + (x.level === LEVEL.critical ? x.share : 0), 0);
+      const tr = sim.traffic;
+      if (tr) {
+        roads.lines.push(`Simulated crashes: ${tr.crashes24} in the last 24 h (typical ≈ 6)${tr.mult > 1.5 ? ` · risk ×${tr.mult.toFixed(1)} (${tr.why.join(', ')})` : ''}`);
+        if (tr.mult >= 4) roads.level = Math.max(roads.level, LEVEL.watch);
+      }
     }
     return { power, it, roads, assumed: c.assumed };
   }

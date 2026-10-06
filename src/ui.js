@@ -124,7 +124,7 @@ export class UI {
 
   bindLayers() {
     const L = this.app.layers;
-    for (const [id, key] of [['t-labels', 'labels'], ['t-ring', 'ring'], ['t-roads', 'roads'], ['t-roadstatus', 'roadStatus'], ['t-trees', 'trees'], ['t-clouds', 'clouds'], ['t-precip', 'precip']]) {
+    for (const [id, key] of [['t-labels', 'labels'], ['t-ring', 'ring'], ['t-roads', 'roads'], ['t-roadstatus', 'roadStatus'], ['t-trees', 'trees'], ['t-clouds', 'clouds'], ['t-precip', 'precip'], ['t-cars', 'cars']]) {
       $(id).onchange = (e) => { L[key] = e.target.checked; if (key === 'roadStatus') $('road-legend').hidden = !e.target.checked; };
     }
     $('cam-presets').innerHTML = this.app.cameraPresets.map((p) => `<button data-cam="${p.id}">${p.label}</button>`).join('');
@@ -168,15 +168,22 @@ export class UI {
     for (const a of s.alerts) if (!this.lastAlerts.has(a.text) && a.level !== 'advisory') this.toast(`⚠️ ${a.text}`, a.level === 'extreme' ? '#ff3d6e' : '#ff8a3d');
     this.lastAlerts = now;
 
-    // school
+    // school: the 8 PM call (for tomorrow) and the 5:30 AM final call
+    const lab = { open: 'Open — normal schedule', delay: '2-hour delay', closed: 'Closed', weekend: 'No school (weekend)', watch: 'Watching — final call at 5:30 AM', pending: 'Final call at 5:30 AM' };
+    const cls = { open: 'open', delay: 'delay', closed: 'closed', weekend: 'weekend', watch: 'delay', pending: 'weekend' };
     const decs = [...s.decisions.entries()].sort((a, b) => b[1].t - a[1].t);
-    const lab = { open: 'Open — normal schedule', delay: '2-hour delay', closed: 'Closed', weekend: 'No school (weekend)' };
     if (decs.length) {
       const [day, d] = decs[0];
-      $('school').innerHTML = `<div class="status ${d.status}">${lab[d.status]}</div><div class="muted small" style="margin-top:4px">Decision at 5:30 AM, ${fmtShort(d.t).replace(/ \d+a$/, '')}</div>`
-        + (d.status !== 'weekend' ? `<ul class="reasons">${d.reasons.map((r) => `<li>${r}</li>`).join('')}</ul>` : '')
-        + `<div class="hist">${decs.slice(1, 6).map(([k, x]) => `${k.slice(5)}: ${lab[x.status].split(' —')[0]}`).join(' · ')}</div>`;
-    } else $('school').innerHTML = '<div class="muted">The next decision is made at 5:30 AM. Run the clock to see it.</div>';
+      const dayName = new Date(day + 'T12:00Z').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC' });
+      const call = (when, x) => `<div class="call"><div class="when">${when}</div><div class="status ${cls[x.status]}">${lab[x.status]}</div>${x.status !== 'weekend' && x.reasons?.length ? `<ul class="reasons">${x.reasons.map((r) => `<li>${r}</li>`).join('')}</ul>` : ''}</div>`;
+      $('school').innerHTML = `<div class="muted small" style="margin-bottom:6px">For ${dayName}</div><div class="calls">`
+        + (d.evening ? call('8 PM call (evening before)', d.evening) : '')
+        + (d.status !== 'pending' ? call('5:30 AM final call', d) : '')
+        + `</div><div class="hist">${decs.slice(1, 6).filter(([, x]) => x.status !== 'pending').map(([k, x]) => `${k.slice(5)}: ${lab[x.status].split(' —')[0]}`).join(' · ')}</div>`;
+    } else $('school').innerHTML = '<div class="muted">Calls are made at 8 PM (for the next day) and 5:30 AM. Run the clock to see them.</div>';
+
+    // regional weather cams
+    if (s.region) this.drawCams(s);
 
     // campus operations
     const rep = s.opsReport;
@@ -237,6 +244,58 @@ export class UI {
     const n = $('narrative');
     if (s.mode === 'scenario' && s.note) { n.hidden = false; n.textContent = s.note; } else n.hidden = true;
     this.drawChart();
+  }
+
+  drawCams(sim) {
+    const box = $('cams');
+    if (!this.camEls) {
+      box.innerHTML = sim.region.map((c) => `<div class="cam" title="${c.name} · ${c.distMi.toFixed(0)} mi ${c.dir}"><canvas width="192" height="108"></canvas><span class="ts"></span><span class="tag"></span><div class="cap"><b>${c.name}</b><span></span></div></div>`).join('');
+      this.camEls = [...box.querySelectorAll('.cam')];
+    }
+    const sun = sim.sun.elevation, day = Math.max(0, Math.min(1, (sun + 6) / 16)), w = sim.wx;
+    const tsd = new Date(sim.t); const ts = `${String(tsd.getUTCHours()).padStart(2, '0')}:${String(tsd.getUTCMinutes()).padStart(2, '0')}`;
+    sim.region.forEach((c, i) => {
+      const el = this.camEls[i], cv = el.querySelector('canvas'), g = cv.getContext('2d'), W = cv.width, H = cv.height;
+      const over = Math.min(1, w.cloud), mix = (a, b, t) => a.map((v, j) => Math.round(v + (b[j] - v) * t));
+      const rgb = (a) => `rgb(${a.join(',')})`;
+      let skyTop = mix([10, 14, 30], [90, 145, 210], day), skyBot = mix([25, 30, 45], [185, 205, 225], day);
+      skyTop = mix(skyTop, mix([20, 22, 26], [120, 125, 132], day), over); skyBot = mix(skyBot, mix([30, 32, 36], [160, 163, 168], day), over);
+      const sky = g.createLinearGradient(0, 0, 0, H * 0.55); sky.addColorStop(0, rgb(skyTop)); sky.addColorStop(1, rgb(skyBot));
+      g.fillStyle = sky; g.fillRect(0, 0, W, H);
+      // mountains (snowy above the snow line)
+      const snowy = c.snowCm > 2 || (c.T < 0 && c.type === 'snow');
+      g.fillStyle = rgb(mix(mix([18, 24, 22], [70, 92, 80], day), [205, 210, 218], snowy ? 0.8 * day + 0.1 : 0));
+      g.beginPath(); g.moveTo(0, H * 0.55);
+      for (let x = 0; x <= W; x += 8) g.lineTo(x, H * (0.36 + 0.08 * Math.sin(x * 0.05 + i) + 0.05 * Math.sin(x * 0.13 + i * 2)));
+      g.lineTo(W, H * 0.55); g.fill();
+      // ground & road
+      g.fillStyle = rgb(mix(mix([15, 22, 15], [70, 98, 55], day), [215, 220, 228], snowy ? 0.85 : 0)); g.fillRect(0, H * 0.55, W, H);
+      const surf = { clear: [70, 72, 76], wet: [42, 44, 48], fog: [60, 62, 66], slush: [150, 150, 150], snow: [225, 228, 235], ice: [95, 115, 130], patchy: [55, 62, 70], debris: [70, 72, 76], flooded: [120, 95, 60], closed: [70, 72, 76] }[c.cond];
+      g.fillStyle = rgb(mix(surf.map((v) => v * 0.35), surf, day * 0.85 + 0.15));
+      g.beginPath(); g.moveTo(W * 0.46, H * 0.55); g.lineTo(W * 0.54, H * 0.55); g.lineTo(W * 0.98, H); g.lineTo(W * 0.02, H); g.fill();
+      if (c.cond !== 'snow') { g.strokeStyle = 'rgba(240,220,120,.8)'; g.setLineDash([5, 6]); g.beginPath(); g.moveTo(W * 0.5, H * 0.56); g.lineTo(W * 0.5, H); g.stroke(); g.setLineDash([]); }
+      if (c.cond === 'ice' || c.cond === 'wet' || c.cond === 'patchy') { g.fillStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.ellipse(W * 0.55, H * 0.82, W * 0.12, H * 0.04, 0, 0, 7); g.fill(); }
+      if (c.cond === 'debris') { g.strokeStyle = '#3b2a1a'; g.lineWidth = 3; g.beginPath(); g.moveTo(W * 0.25, H * 0.8); g.lineTo(W * 0.62, H * 0.74); g.stroke(); g.lineWidth = 1; }
+      if (c.cond === 'closed') { g.fillStyle = '#e8590c'; for (let k = 0; k < 4; k++) g.fillRect(W * (0.3 + k * 0.11), H * 0.78, 8, 10); }
+      // headlights at night
+      if (day < 0.5) { g.fillStyle = 'rgba(255,240,200,.9)'; g.fillRect(W * 0.43, H * 0.7, 3, 2); g.fillRect(W * 0.47, H * 0.7, 3, 2); }
+      // precipitation
+      const amt = Math.min(1, Math.sqrt(c.precip / 20));
+      if (c.precip > 0.1) {
+        const snowing = c.type === 'snow' || c.type === 'sleet';
+        g.strokeStyle = 'rgba(230,235,245,.6)'; g.fillStyle = 'rgba(245,248,255,.9)';
+        for (let k = 0; k < 140 * amt; k++) {
+          const x = Math.random() * W, y = Math.random() * H;
+          if (snowing) g.fillRect(x, y, 1.6, 1.6); else { g.beginPath(); g.moveTo(x, y); g.lineTo(x - 2, y + 7); g.stroke(); }
+        }
+      }
+      // fog / low visibility
+      const fogA = Math.max(0, Math.min(0.85, 1 - c.visMi / 3));
+      if (fogA > 0.02) { g.fillStyle = `rgba(${mix([40, 42, 46], [200, 204, 210], day).join(',')},${fogA})`; g.fillRect(0, 0, W, H); }
+      el.querySelector('.ts').textContent = `CAM · ${ts}`;
+      const tag = el.querySelector('.tag'); tag.textContent = c.label; tag.className = `tag l${c.level}`;
+      el.querySelector('.cap span').textContent = `${Math.round(cToF(c.T))}°F · ${c.distMi.toFixed(0)} mi ${c.dir}`;
+    });
   }
 
   drawChart() {

@@ -15,6 +15,7 @@ import { buildRoads, makeRoadEvaluator, fallbackRoads, campusDrives, fallbackSig
 import { loadOSM, saveOSMSnapshot } from './render/osm.js';
 import { inCampus } from './campus-geo.js';
 import { Labels } from './render/labels.js';
+import { createTraffic } from './render/cars.js';
 import { UI } from './ui.js';
 
 const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -64,6 +65,9 @@ async function main() {
   let roads = buildRoads(FALLBACK, hydro, land.cover);
   scene.add(roads.mesh);
   sim.roadEvaluator = makeRoadEvaluator(roads, hydro, fallbackSignals(FALLBACK));
+  const traffic = createTraffic(mobile ? 220 : 520);
+  traffic.setRoads(FALLBACK, roads.samples);
+  scene.add(traffic.group);
 
   const sky = createSky();
   scene.add(sky.mesh);
@@ -137,7 +141,7 @@ async function main() {
   controls.target.copy(campusT);
 
   // ---- app state shared with the UI
-  const layers = { labels: true, ring: true, roads: true, roadStatus: false, trees: true, clouds: true, precip: true };
+  const layers = { labels: true, ring: true, roads: true, roadStatus: false, trees: true, clouds: true, precip: true, cars: true };
   let playing = true;
   const app = {
     layers, cameraPresets, flyTo, saveOSMSnapshot,
@@ -158,8 +162,14 @@ async function main() {
     if (sim.landslides.length <= 3 || sim.landslides.length % 5 === 0) ui.toast(`⛰ Landslide #${sim.landslides.length} on a saturated slope`, '#c08a4a');
   });
   sim.on('decision', (d) => {
+    if (d.phase === 'evening') {
+      const day = new Date(d.forDay).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
+      const msg = { closed: `CDS will be CLOSED ${day}`, watch: `Possible delay ${day} — final call at 5:30 AM`, open: `CDS expects a normal schedule ${day}` }[d.status];
+      ui.toast(`🌙 8 PM call: ${msg}`, d.status === 'open' ? '#3ecf73' : d.status === 'watch' ? '#f5d142' : '#ff3d6e');
+      return;
+    }
     const msg = { open: 'CDS is OPEN on a normal schedule', delay: 'CDS is on a 2-HOUR DELAY', closed: 'CDS is CLOSED today' }[d.status];
-    ui.toast(`🏫 5:30 AM decision: ${msg}`, d.status === 'open' ? '#3ecf73' : d.status === 'delay' ? '#f5d142' : '#ff3d6e');
+    if (msg) ui.toast(`🏫 5:30 AM call: ${msg}`, d.status === 'open' ? '#3ecf73' : d.status === 'delay' ? '#f5d142' : '#ff3d6e');
   });
   sim.on('reset', () => { clearScars(land); forest.reset(); peakStage.fill(0); });
   app.jumpToNow();
@@ -173,6 +183,7 @@ async function main() {
     scene.add(roads.mesh);
     const signals = osm.signals.length ? osm.signals.map(([la, lo]) => llToXZ(la, lo)) : fallbackSignals(FALLBACK);
     sim.roadEvaluator = makeRoadEvaluator(roads, hydro, signals);
+    traffic.setRoads([...osm.roads, ...campusDrives()], roads.samples);
     labelRoads(osm.roads);
     const bgroup = new THREE.Group();
     const wallMat = structureMaterial(0xb9a68e), houseMat = structureMaterial(0xc9c2b4);
@@ -293,6 +304,7 @@ async function main() {
     sky.mesh.position.copy(camera.position);
     precip.update(sim, camera, controls.target, renderer.getPixelRatio());
     lightning.update(sim, dt, playing, controls.target, groundY);
+    traffic.update(sim, dt, layers.cars && layers.roads, U.uNight.value);
     const now = performance.now();
     if (now - lastSync > 300) { lastSync = now; forest.sync(sim.treesDownFrac, U.uTime.value, sim.wx.windDir); }
     if (now - lastUI > 250) { lastUI = now; ui.update(); }
@@ -308,7 +320,7 @@ async function main() {
   });
   // handy for debugging & automated screenshots: advance the simulation quickly by N hours
   const advance = (hours) => { for (let i = 0; i < hours * 12; i++) sim.step(1 / 12); forest.sync(sim.treesDownFrac, U.uTime.value - 5, sim.wx.windDir); };
-  window.__cds = { sim, app, camera, controls, ui, U, advance };
+  window.__cds = { sim, app, camera, controls, ui, U, advance, traffic };
   frame();
 }
 

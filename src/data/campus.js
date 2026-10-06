@@ -14,20 +14,20 @@ export const GEOREF = {
 // Optional: [{ px: [x, y], lat, lon }, { px: [x, y], lat, lon }] — overrides GEOREF when two points are given.
 export const CONTROL_POINTS = [];
 
-// Floors are estimates — correct them if you know better. `uses` comes straight from the map legend.
+// Floors confirmed by CDS: buildings 5, 8 and 9 have two floors; all others are single-story. `uses` comes straight from the map legend.
 export const BUILDINGS = [
-  { id: 1, name: 'Business & Community', floors: 2, roof: 'gable',
+  { id: 1, name: 'Business & Community', floors: 1, roof: 'gable',
     uses: ['Advancement', 'Business Office', 'Financial Aid', 'Marketing Communications'],
     poly: [[470, 152], [500, 152], [500, 175], [512, 175], [512, 205], [470, 205]] },
   { id: 2, name: 'Key Lower School Modular', floors: 1, roof: 'flat',
     uses: ['Key Lower School classrooms'], poly: [[540, 178], [585, 178], [585, 222], [540, 222]] },
-  { id: 3, name: 'Key House', floors: 2, roof: 'gable',
+  { id: 3, name: 'Key House', floors: 1, roof: 'gable',
     uses: ['Key Lower School classrooms', 'Key Learning Center', 'Horizons at Carolina Day offices'],
     poly: [[528, 260], [550, 260], [550, 285], [558, 285], [558, 328], [522, 328], [522, 290], [528, 290]] },
-  { id: 4, name: 'Key School Office', floors: 2, roof: 'hip',
+  { id: 4, name: 'Key School Office', floors: 1, roof: 'hip',
     uses: ['Admission for Key School', 'Key School Administration', 'Key Lower School classrooms'],
     poly: [[600, 200], [652, 200], [652, 232], [640, 245], [600, 245]] },
-  { id: 5, name: 'Upper School', floors: 3, roof: 'hip',
+  { id: 5, name: 'Upper School', floors: 2, roof: 'hip',
     uses: ['Admission for Upper School', 'Upper School Auditorium', 'Upper School Classrooms'],
     poly: [[628, 245], [652, 232], [705, 232], [705, 245], [770, 245], [772, 322], [738, 330], [700, 318], [656, 318], [628, 302]] },
   { id: 6, name: 'After Care Building', floors: 1, roof: 'gable',
@@ -43,10 +43,10 @@ export const BUILDINGS = [
       [[790, 685], [855, 685], [855, 730], [790, 730]],
       [[665, 645], [715, 645], [715, 656], [665, 656]],
     ] },
-  { id: 9, name: 'Nash Athletic Center', floors: 2, height: 13, roof: 'flat',
+  { id: 9, name: 'Nash Athletic Center', floors: 2, height: 11, roof: 'flat',
     uses: ['Athletic Offices', 'Lasher Weight Room', 'Nash Gym'],
     poly: [[925, 738], [990, 738], [990, 830], [1010, 830], [1010, 885], [985, 885], [985, 875], [925, 875]] },
-  { id: 10, name: 'Stephens Hall', floors: 2, roof: 'hip',
+  { id: 10, name: 'Stephens Hall', floors: 1, roof: 'hip',
     uses: ['Middle School (6–8)', 'Key Middle School (6–8)'],
     poly: [[905, 930], [990, 930], [990, 940], [1025, 940], [1025, 995], [905, 995]] },
 ];

@@ -95,6 +95,7 @@
           <label class="check"><input type="checkbox" id="t-trees" checked /> Trees</label>
           <label class="check"><input type="checkbox" id="t-clouds" checked /> Clouds</label>
           <label class="check"><input type="checkbox" id="t-precip" checked /> Rain / snow</label>
+          <label class="check"><input type="checkbox" id="t-cars" checked /> Traffic</label>
         </div>
         <div id="road-legend" class="legend" hidden>
           <span><i style="background:#33cc59"></i>Clear</span><span><i style="background:#f2f2ff"></i>Snow</span><span><i style="background:#4de6ff"></i>Ice</span><span><i style="background:#2659ff"></i>Flooded</span><span><i style="background:#ff261a"></i>Blocked</span><span><i style="background:#ff9a1a"></i>Signal dark</span><span class="legend-note">Buildings: green = utility power, amber = generator, red = no power</span>
@@ -137,6 +138,11 @@
       <section>
         <h3>Carolina Day School status</h3>
         <div id="school"></div>
+      </section>
+      <section>
+        <h3>Regional check · 30-mile radius</h3>
+        <p class="hint" style="margin:0 0 8px">Simulated interstate & highway weather cams used for the 8 PM and 5:30 AM calls.</p>
+        <div id="cams" class="cams"></div>
       </section>
       <section>
         <h3>Campus operations</h3>

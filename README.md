@@ -30,7 +30,8 @@ When the browser is online, the app also loads **real roads and building footpri
 The campus is digitized from the official CDS campus map (`docs/campus-map.jpg`). It includes all 10 buildings with their names and uses, plus the North, South and West lots, campus drives, Marberger Field, Neder Playground, the Woodlands, the Middle School outdoor classrooms, and the bordering streets: Hendersonville Rd, Stuyvesant Rd, Green Rd and Stuyvesant Crescent. Data lives in `src/data/campus.js`.
 
 - **Position and scale are estimates.** The map has no scale bar. To lock it in exactly, add two `CONTROL_POINTS` in `src/data/campus.js`, using real coordinates for two map spots, for example Google Maps pins on Love Hall and the Nash Athletic Center.
-- **Floor counts are estimates.** Correct them in the same file.
+- **Floors are confirmed by CDS:** the Upper School (5), Love Hall (8) and the Nash Athletic Center (9) have two floors, and the rest are single-story.
+- **Scale is calibrated** against satellite imagery (`docs/campus-satellite.png`).
 
 ## Campus operations tests
 
@@ -42,9 +43,18 @@ The **Campus operations** panel scores three systems every simulated minute as *
 | **IT & communications** | Internet circuits on utility poles are cut by falling trees, ice and wind. Underground circuits are cut by floods and landslides. The network core runs on battery backup (UPS) and then the generator. Provider equipment fails after hours without area power. VoIP desk phones, Wi-Fi in unpowered buildings, and cell service (tower batteries and backhaul) are also tracked. |
 | **Road safety** | Each stretch of road is checked for flooding (bridges close only when the water rises well above normal), fallen trees and landslides (crews clear main roads in about 2 days and side streets in about 4), snow, and black ice. Bridges and shaded, north-facing curves freeze first. Traffic signals go dark during power outages, and low visibility is flagged. Results are summarized for each family route: Hendersonville Rd north, Hendersonville Rd south, and Biltmore Forest/Stuyvesant. |
 
-The 5:30 AM open/delay/close decision uses all three systems.
+## School decisions: 8 PM and 5:30 AM
 
-**⚠ Placeholders to replace:** generator coverage, UPS runtime, number and routing of internet circuits, and route shares are assumptions in `src/data/campus-ops.js`, and the app labels them as assumed. Ask Facilities and IT to correct them. Keep the details general, because this file ships with the public web app: no IP addresses, equipment models or network diagrams.
+These follow CDS practice. **At 8 PM** the evening before, the app either announces a closure, flags a possible delay with "final call at 5:30 AM", or expects a normal day. **At 5:30 AM** it makes the final call: open, 2-hour delay or closed. Both calls weigh:
+- campus conditions and the forecast (scripted in scenarios; otherwise current weather plus the expected overnight low, to catch refreezing)
+- campus power, IT and road-safety status
+- a **30-mile regional check** using simulated interstate and highway weather cams: I-26 at Fletcher, Weaverville, Hendersonville and Mars Hill; I-40 at Black Mountain, the Old Fort grade and Canton; US-23/74 at Waynesville; and the Blue Ridge Parkway near Mt. Pisgah. Each cam site has its own elevation, so it can show snow when campus only has rain. Each site can also see river flooding, plowing and closures. Staff and families commute from across this area.
+
+## Traffic
+
+Animated cars follow the road network. Traffic follows weekday rush hours and weekend patterns, and school carpool lines run at drop-off and pickup, shifted 2 hours on delay days. Drivers slow down for rain, snow, ice, fog and dark signals. They stop and turn around at flooded or blocked roads, and use headlights at night and in bad weather. Some slide off on ice: those cars flash their hazard lights. The engine also estimates **simulated crashes** from traffic volume × weather risk, with a typical day of about 6 within 5 miles. These appear in the Road safety card.
+
+**⚠ Placeholders to replace:** generator coverage, number and routing of internet circuits, and route shares are assumptions in `src/data/campus-ops.js`, and the app labels them as assumed. Ask Facilities and IT to correct them. Keep the details general, because this file ships with the public web app: no IP addresses, equipment models or network diagrams.
 
 **Real roads and signals:** when the app is online it loads OpenStreetMap roads, traffic signals and neighborhood buildings. Click **⬇ Save map data**, then commit the file it saves as `data/osm-snapshot.json`. The app will then load real roads instantly and offline.
 

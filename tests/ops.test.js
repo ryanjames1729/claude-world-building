@@ -77,3 +77,30 @@ test('the January snowstorm makes driving hazardous but campus stays powered', (
   assert.ok(worst.roads >= LEVEL.watch);
   assert.ok(sim.ops.utilityOn);
 });
+
+test('8 PM call announces a closure before the January snowstorm; 5:30 AM confirms it', () => {
+  const sim = new Simulation(hydro, 1234);
+  sim.roadEvaluator = makeRoadEvaluator(roads, hydro, fallbackSignals(ways));
+  sim.setMode('scenario', 'jansnow');
+  for (let i = 0; i < 14 * 12; i++) sim.step(1 / 12);
+  const d = sim.decisions.get('2026-01-22');
+  assert.equal(d.evening.status, 'closed');
+  assert.equal(d.status, 'closed');
+  assert.ok(d.evening.reasons.some((r) => r.includes('snow')));
+});
+
+test('regional cams see snow on the interstates and crash risk rises', () => {
+  const { sim } = run('jansnow', 10);
+  assert.ok(sim.region.filter((s) => s.road.startsWith('I-') && s.level >= 2).length >= 3);
+  assert.ok(sim.traffic.mult > 3, `crash multiplier ${sim.traffic.mult}`);
+  assert.ok(sim.region.every((s) => s.distMi <= 30), 'all cams within 30 miles');
+});
+
+test('UPS battery gives the network core about 30 minutes', () => {
+  const sim = new Simulation(hydro, 9);
+  sim.ops.cfg = { ...sim.ops.cfg, power: { ...sim.ops.cfg.power, generators: [] } };
+  sim.ops.reset();
+  sim.ops.utilityOn = false;
+  sim.ops.compute(sim, 0.25); assert.ok(sim.ops.coreUp, 'still up at 15 min');
+  sim.ops.compute(sim, 0.3); assert.ok(!sim.ops.coreUp, 'down after ~33 min');
+});

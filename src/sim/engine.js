@@ -2,9 +2,12 @@
 // river hydrology, and impacts (trees, power, landslides, roads, school operations, alerts).
 // Pure JavaScript — no rendering — so it can be unit-tested in Node.
 import { elev, N, slopeDeg, mulberry32, REF_ELEV_M } from '../geo.js';
-import { ClimateGenerator, cToF, fToC } from './climate.js';
+import { ClimateGenerator, cToF, fToC, normalsFor } from './climate.js';
 import { SCENARIOS } from './scenarios.js';
 import { CampusOps, LEVEL } from './ops.js';
+import { regionalConditions, regionalSummary } from './region.js';
+import { roadRisk } from './traffic.js';
+import { CAMPUS_OPS } from '../data/campus-ops.js';
 import { HOUR, DAY, parseLocal, hourOfDay, dayOfYear, sunPosition, isSchoolDay, localMs } from './clock.js';
 
 export const BANDS = 8;
@@ -102,6 +105,9 @@ export class Simulation {
     this.decisions = new Map();
     this.roads = null;
     this.ops?.reset();
+    this.crashes = [];
+    this.traffic = { volume: 0, mult: 1, why: [], crashes24: 0 };
+    this.region = null;
     this.opsReport = null;
     this.note = '';
     this.alerts = [];
@@ -259,6 +265,9 @@ export class Simulation {
     if (this.ptype === 'fzra') this.roadIce = 1;
     if (Tref > 1 && !wet) this.roadIce = Math.max(0, this.roadIce - dtH * (this.sun.elevation > 0 ? 0.25 : 0.1));
     if (Tref > 3) this.roadIce = Math.max(0, this.roadIce - dtH * 0.5);
+    this.sinceSnowH = this.ptype === 'snow' || this.ptype === 'sleet' ? 0 : (this.sinceSnowH ?? 99) + dtH;
+    // crews salt and plow once precipitation stops; black ice lingers a day or two in the cold
+    if (w.precip < 0.05 && this.ptype !== 'fzra') this.roadIce = Math.max(0, this.roadIce - dtH * (this.sun.elevation > 10 ? 0.05 : 0.02));
 
     // --- soil moisture & runoff (mm/h)
     const sat = this.soil;
@@ -314,6 +323,13 @@ export class Simulation {
 
     // --- roads, alerts, school decisions, history
     if (this.roadEvaluator) this.roads = this.roadEvaluator(this);
+    this.region = regionalConditions(this);
+    // simulated crashes: traffic volume × weather risk (Poisson draws in sim time)
+    const risk = roadRisk(this);
+    let lambda = 0.25 * (risk.volume / 0.5) * risk.mult * dtH;
+    while (lambda > 0) { if (this.rng() < Math.min(1, lambda)) this.crashes.push(this.t); lambda -= 1; }
+    while (this.crashes.length && this.crashes[0] < this.t - DAY) this.crashes.shift();
+    this.traffic = { ...risk, crashes24: this.crashes.length };
     this.ops.step(this, dtH);
     this.opsReport = this.ops.report(this);
     this.alerts = this.computeAlerts();
@@ -427,14 +443,8 @@ export class Simulation {
     return A;
   }
 
-  /** At 5:30 AM on school days, the "head of school" decides: open, delay or close. */
-  checkSchoolDecision() {
-    const prev = this.lastT, cur = this.t;
-    const dayStart = Date.UTC(new Date(cur).getUTCFullYear(), new Date(cur).getUTCMonth(), new Date(cur).getUTCDate());
-    const decisionT = dayStart + 5.5 * HOUR;
-    if (!(prev < decisionT && cur >= decisionT)) return;
-    const key = new Date(dayStart).toISOString().slice(0, 10);
-    if (!isSchoolDay(cur)) { this.decisions.set(key, { t: decisionT, status: 'weekend', reasons: ['Weekend'] }); return; }
+  /** Current conditions on campus and nearby roads → [status, reasons]. */
+  assessNow() {
     const c = this.campus, r = this.roads, w = this.wx, reasons = [];
     let status = 'open';
     const close = (why) => { status = 'closed'; reasons.push(why); };
@@ -450,7 +460,6 @@ export class Simulation {
     if (w.gustMs * MPH >= 50) close('Dangerous wind gusts');
     if (this.visibilityMi() < 0.3) delay('Dense fog');
     if (this.gaugeFt(3) >= 12 || this.riseM(1) > 1.6) close('Flooding on area roads and rivers');
-    // Campus operations: power, network and the routes families drive
     const ops = this.opsReport;
     if (ops) {
       if (ops.power.level === LEVEL.critical) close('Campus buildings without power');
@@ -461,18 +470,84 @@ export class Simulation {
       else if (routesClosed > 0) delay(`Some family routes closed (~${Math.round(routesClosed * 100)}% of families)`);
       if (r && r.signalsOut >= 2) delay(`${r.signalsOut} traffic signals dark on area roads`);
     }
-    // In scenarios the storm's future is known, so leaders can act on the forecast (as they did before Helene).
-    const fc = this.forecast(20);
-    if (fc) {
-      if (fc.maxGustMph >= 50) close(`Forecast: damaging gusts to ${Math.round(fc.maxGustMph)} mph today`);
-      if (fc.maxRainIn >= 0.5) close(`Forecast: torrential rain (${fc.maxRainIn.toFixed(1)}"/hr) and flooding`);
-      if (fc.snowIn >= 2 && c.snowCm < 5) close(`Forecast: ${fc.snowIn.toFixed(0)}"+ of snow during the school day`);
-      if (fc.fzra && this.iceMm[this.refBand] < 1.5) close('Forecast: freezing rain during the school day');
+    // 30-mile check: staff and families commute from across the region (interstate weather cams)
+    if (this.region) {
+      const reg = regionalSummary(this.region);
+      const names = (list) => list.slice(0, 3).map((x) => `${x.name} ${x.label.toLowerCase()}`).join('; ');
+      if (reg.interstateBad >= 3) close(`Regional cams (30 mi): ${names(reg.bad)}`);
+      else if (reg.bad.length) delay(`Regional cams (30 mi): ${names(reg.bad)}`);
+      else if (reg.watch.length >= 3) delay(`Regional cams (30 mi): ${names(reg.watch)}`);
     }
-    if (status === 'closed' && reasons.length === 0) reasons.push('Hazardous conditions');
-    if (status === 'open') reasons.push('Conditions safe for travel');
-    const d = { t: decisionT, status, reasons };
-    this.decisions.set(key, d);
-    this.emit('decision', d);
+    return { get status() { return status; }, reasons, close, delay };
+  }
+
+  /** What's expected over the next hours: scripted in scenarios, persistence + climate otherwise. */
+  outlook(hours) {
+    const fc = this.forecast(hours);
+    if (fc) return fc;
+    // outside scenarios: assume current weather continues and the night cools toward the normal low
+    const w = this.wx, rate = w.precip;
+    const nm = normalsFor(dayOfYear(this.t + 10 * HOUR));
+    const lowC = Math.min(w.tempC, nm.lo + this.climate.anom);
+    const type = rate > 0.05 ? precipType(lowC, w.warmNose) : 'none';
+    return {
+      maxGustMph: w.gustMs * MPH, maxRainIn: rate / IN,
+      snowIn: type === 'snow' ? rate * 0.5 * hours * 1.1 / 2.54 : 0, fzra: type === 'fzra',
+      refreeze: lowC < 0 && (this.roadIce > 0.2 || rate > 0.1 || this.campus.snowCm > 0.5), lowF: lowC * 1.8 + 32, persistence: true,
+    };
+  }
+
+  /** Two calls a school day: 8 PM the evening before (for tomorrow) and the final call at 5:30 AM. */
+  checkSchoolDecision() {
+    const D = CAMPUS_OPS.decisions;
+    const prev = this.lastT, cur = this.t;
+    const dayStart = Date.UTC(new Date(cur).getUTCFullYear(), new Date(cur).getUTCMonth(), new Date(cur).getUTCDate());
+    const keyOf = (t) => new Date(t).toISOString().slice(0, 10);
+    const crossed = (h) => prev < dayStart + h * HOUR && cur >= dayStart + h * HOUR;
+
+    // ---- 8 PM call for tomorrow
+    if (crossed(D.eveningHour)) {
+      const tomorrow = dayStart + 24 * HOUR;
+      if (isSchoolDay(tomorrow)) {
+        const a = this.assessNow();
+        const fc = this.outlook(14);
+        if (fc.maxGustMph >= 50) a.close(`Forecast: damaging gusts to ${Math.round(fc.maxGustMph)} mph`);
+        if (fc.maxRainIn >= 0.5) a.close(`Forecast: torrential rain (${fc.maxRainIn.toFixed(1)}"/hr) and flooding`);
+        if (fc.snowIn >= 2) a.close(`Forecast: ${fc.snowIn.toFixed(0)}"+ of snow overnight`);
+        else if (fc.snowIn > 0.3) a.delay(`Forecast: light snow overnight`);
+        if (fc.fzra) a.close('Forecast: freezing rain overnight');
+        if (fc.refreeze) a.delay(`Overnight low near ${Math.round(fc.lowF)}°F on wet roads: black ice possible`);
+        // the evening call only commits to a closure; anything less is "watching — final call at 5:30 AM"
+        const status = a.status === 'closed' ? 'closed' : a.status === 'delay' ? 'watch' : 'open';
+        const ev = { t: cur, status, reasons: a.reasons.length ? a.reasons : ['No weather concerns for tomorrow'] };
+        const k = keyOf(tomorrow);
+        this.decisions.set(k, { ...(this.decisions.get(k) || {}), evening: ev, t: tomorrow + D.morningHour * HOUR, status: 'pending' });
+        this.emit('decision', { ...ev, phase: 'evening', forDay: tomorrow });
+      }
+    }
+
+    // ---- 5:30 AM final call
+    if (crossed(D.morningHour)) {
+      const key = keyOf(dayStart);
+      const prior = this.decisions.get(key) || {};
+      if (!isSchoolDay(cur)) { this.decisions.set(key, { t: cur, status: 'weekend', reasons: ['Weekend'] }); return; }
+      let status, reasons;
+      if (prior.evening?.status === 'closed') {
+        status = 'closed'; reasons = ['Announced at 8 PM', ...prior.evening.reasons];
+      } else {
+        const a = this.assessNow();
+        const fc = this.outlook(10);
+        if (fc.maxGustMph >= 50) a.close(`Forecast: damaging gusts to ${Math.round(fc.maxGustMph)} mph today`);
+        if (fc.maxRainIn >= 0.5) a.close(`Forecast: torrential rain (${fc.maxRainIn.toFixed(1)}"/hr) and flooding`);
+        if (fc.snowIn >= 2 && this.campus.snowCm < 5) a.close(`Forecast: ${fc.snowIn.toFixed(0)}"+ of snow during the school day`);
+        if (fc.fzra && this.iceMm[this.refBand] < 1.5) a.close('Forecast: freezing rain during the school day');
+        status = a.status; reasons = a.reasons;
+        if (status === 'closed' && reasons.length === 0) reasons.push('Hazardous conditions');
+        if (status === 'open') reasons.push('Conditions safe for travel');
+      }
+      const d = { ...prior, t: cur, status, reasons };
+      this.decisions.set(key, d);
+      this.emit('decision', { ...d, phase: 'morning' });
+    }
   }
 }
