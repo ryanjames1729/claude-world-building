@@ -35,6 +35,7 @@ jobs:
           cp index.html styles.css manifest.webmanifest sw.js _site/
           cp -r icons _site/
           cp dist/cds-weather-world.js _site/dist/
+          if [ -d data ]; then cp -r data _site/; fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

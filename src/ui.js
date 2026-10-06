@@ -3,6 +3,7 @@ import { SCENARIOS } from './sim/scenarios.js';
 import { cToF, fToC } from './sim/climate.js';
 import { fmt, fmtShort, HOUR } from './sim/clock.js';
 import { MPH, IN, PTYPE_LABEL, RIVER_INFO } from './sim/engine.js';
+import { BUILDINGS } from './data/campus.js';
 
 const $ = (id) => document.getElementById(id);
 const kv = (k, v) => `<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`;
@@ -131,7 +132,11 @@ export class UI {
   }
 
   setPlaying(p) { $('btn-play').textContent = p ? '⏸' : '▶'; }
-  setOSMStatus(t) { $('osm-status').textContent = t; }
+  setOSMStatus(t, canSave = false) {
+    $('osm-status').textContent = t;
+    $('btn-save-osm').hidden = !canSave;
+    $('btn-save-osm').onclick = () => { if (this.app.saveOSMSnapshot()) this.toast('Saved osm-snapshot.json — send it to bake real roads into the app', '#3ecf73'); };
+  }
 
   update() {
     const s = this.sim, w = s.wx, c = s.campus;
@@ -172,6 +177,19 @@ export class UI {
         + (d.status !== 'weekend' ? `<ul class="reasons">${d.reasons.map((r) => `<li>${r}</li>`).join('')}</ul>` : '')
         + `<div class="hist">${decs.slice(1, 6).map(([k, x]) => `${k.slice(5)}: ${lab[x.status].split(' —')[0]}`).join(' · ')}</div>`;
     } else $('school').innerHTML = '<div class="muted">The next decision is made at 5:30 AM. Run the clock to see it.</div>';
+
+    // campus operations
+    const rep = s.opsReport;
+    if (rep) {
+      const LBL = ['Normal', 'Watch', 'Critical'];
+      $('ops').innerHTML = [['Power', rep.power], ['IT & communications', rep.it], ['Road safety', rep.roads]].map(([cat, c]) =>
+        `<div class="opscard l${c.level}"><div class="hd"><span class="cat">${cat}</span><span class="pillst l${c.level}">${LBL[c.level]}</span></div>
+         <div class="ttl">${c.title}</div>${c.lines.length ? `<ul>${c.lines.map((l) => `<li>${l}</li>`).join('')}</ul>` : ''}</div>`).join('');
+      const col = { utility: '#3ecf73', generator: '#f5b232', none: '#ff3d6e' }, txt = { utility: 'Utility power', generator: 'Generator', none: 'No power' };
+      $('ops-bldgs').innerHTML = BUILDINGS.map((b) => { const st = s.ops.buildings[b.id];
+        return `<div class="brow"><span><i class="dot" style="background:${col[st]}"></i>${b.id}. ${b.name}</span><span class="muted">${txt[st]}</span></div>`; }).join('');
+      $('ops-assumed').hidden = !rep.assumed;
+    }
 
     // accumulations
     const ridge = 7;

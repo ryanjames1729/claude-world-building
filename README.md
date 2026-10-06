@@ -25,6 +25,29 @@ Phones and tablets automatically get a lighter scene, with fewer trees and parti
 
 When the browser is online, the app also loads **real roads and building footprints from OpenStreetMap**, which replace the schematic campus and the approximate highway lines.
 
+## The campus
+
+The campus is digitized from the official CDS campus map (`docs/campus-map.jpg`). It includes all 10 buildings with their names and uses, plus the North, South and West lots, campus drives, Marberger Field, Neder Playground, the Woodlands, the Middle School outdoor classrooms, and the bordering streets: Hendersonville Rd, Stuyvesant Rd, Green Rd and Stuyvesant Crescent. Data lives in `src/data/campus.js`.
+
+- **Position and scale are estimates.** The map has no scale bar. To lock it in exactly, add two `CONTROL_POINTS` in `src/data/campus.js`, using real coordinates for two map spots, for example Google Maps pins on Love Hall and the Nash Athletic Center.
+- **Floor counts are estimates.** Correct them in the same file.
+
+## Campus operations tests
+
+The **Campus operations** panel scores three systems every simulated minute as *Normal*, *Watch* or *Critical*, and explains why. Turn on **Hazard view** to see it on the map. Buildings show green for utility power, amber for generator and red for no power. Roads are colored by hazard.
+
+| System | What's simulated |
+|---|---|
+| **Power** | The campus utility feed fails as area-wide outages, falling trees and high winds rise. Generators keep their buildings running until fuel runs out, and fuel trucks can reach campus only when roads are open. Crews restore power once conditions are safe. |
+| **IT & communications** | Internet circuits on utility poles are cut by falling trees, ice and wind. Underground circuits are cut by floods and landslides. The network core runs on battery backup (UPS) and then the generator. Provider equipment fails after hours without area power. VoIP desk phones, Wi-Fi in unpowered buildings, and cell service (tower batteries and backhaul) are also tracked. |
+| **Road safety** | Each stretch of road is checked for flooding (bridges close only when the water rises well above normal), fallen trees and landslides (crews clear main roads in about 2 days and side streets in about 4), snow, and black ice. Bridges and shaded, north-facing curves freeze first. Traffic signals go dark during power outages, and low visibility is flagged. Results are summarized for each family route: Hendersonville Rd north, Hendersonville Rd south, and Biltmore Forest/Stuyvesant. |
+
+The 5:30 AM open/delay/close decision uses all three systems.
+
+**⚠ Placeholders to replace:** generator coverage, UPS runtime, number and routing of internet circuits, and route shares are assumptions in `src/data/campus-ops.js`, and the app labels them as assumed. Ask Facilities and IT to correct them. Keep the details general, because this file ships with the public web app: no IP addresses, equipment models or network diagrams.
+
+**Real roads and signals:** when the app is online it loads OpenStreetMap roads, traffic signals and neighborhood buildings. Click **⬇ Save map data**, then commit the file it saves as `data/osm-snapshot.json`. The app will then load real roads instantly and offline.
+
 ## What's modeled
 
 - **Terrain:** real elevation (USGS 3DEP/SRTM via AWS Terrain Tiles, ~34 m grid), with 1.5× vertical exaggeration.

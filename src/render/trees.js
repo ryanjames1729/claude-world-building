@@ -86,7 +86,7 @@ function buildGeometry(kind) {
   return merged;
 }
 
-export function createForest(landcover, campusAvoid, density = 1) {
+export function createForest(landcover, campusAvoid, density = 1, extra = []) {
   const COUNT_NEAR = Math.round(BASE_NEAR * density), COUNT_FAR = Math.round(BASE_FAR * density);
   const rnd = mulberry32(2024);
   const recs = [];
@@ -102,14 +102,20 @@ export function createForest(landcover, campusAvoid, density = 1) {
     const conifer = rnd() < 0.18 + Math.min(0.3, s / 120) + (e > 900 ? 0.15 : 0);
     recs.push({ x, z, e, conifer, scale: 0.75 + rnd() * 0.6, cell: k });
   };
+  // hand-placed stands first (e.g. the campus Woodlands), then dense near campus, sparser across the map
+  for (const t of extra) {
+    const e = elevationAt(t.x, t.z), k = cellIndex(t.x, t.z);
+    recs.push({ x: t.x, z: t.z, e, conifer: rnd() < 0.3, scale: 0.75 + rnd() * 0.6, cell: k });
+  }
   // dense near campus, sparser across the rest of the map
   let guard = 0;
-  while (recs.length < COUNT_NEAR && guard++ < COUNT_NEAR * 6) {
+  const target = recs.length + COUNT_NEAR;
+  while (recs.length < target && guard++ < COUNT_NEAR * 6) {
     const r = Math.sqrt(rnd()) * 3200, a = rnd() * Math.PI * 2;
     tryPlace(Math.cos(a) * r, Math.sin(a) * r);
   }
   guard = 0;
-  while (recs.length < COUNT_NEAR + COUNT_FAR && guard++ < COUNT_FAR * 6) {
+  while (recs.length < target + COUNT_FAR && guard++ < COUNT_FAR * 6) {
     tryPlace((rnd() * 2 - 1) * HALF_EXTENT_M, (rnd() * 2 - 1) * HALF_EXTENT_M);
   }
   const group = new THREE.Group();

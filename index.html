@@ -91,19 +91,20 @@
           <label class="check"><input type="checkbox" id="t-labels" checked /> Labels</label>
           <label class="check"><input type="checkbox" id="t-ring" checked /> 5-mile ring</label>
           <label class="check"><input type="checkbox" id="t-roads" checked /> Roads</label>
-          <label class="check"><input type="checkbox" id="t-roadstatus" /> Road status colors</label>
+          <label class="check"><input type="checkbox" id="t-roadstatus" /> Hazard view</label>
           <label class="check"><input type="checkbox" id="t-trees" checked /> Trees</label>
           <label class="check"><input type="checkbox" id="t-clouds" checked /> Clouds</label>
           <label class="check"><input type="checkbox" id="t-precip" checked /> Rain / snow</label>
         </div>
         <div id="road-legend" class="legend" hidden>
-          <span><i style="background:#33cc59"></i>Open</span><span><i style="background:#f2f2ff"></i>Snow</span><span><i style="background:#4de6ff"></i>Ice</span><span><i style="background:#2659ff"></i>Flooded</span><span><i style="background:#ff261a"></i>Blocked</span>
+          <span><i style="background:#33cc59"></i>Clear</span><span><i style="background:#f2f2ff"></i>Snow</span><span><i style="background:#4de6ff"></i>Ice</span><span><i style="background:#2659ff"></i>Flooded</span><span><i style="background:#ff261a"></i>Blocked</span><span><i style="background:#ff9a1a"></i>Signal dark</span><span class="legend-note">Buildings: green = utility power, amber = generator, red = no power</span>
         </div>
         <div class="row">
           <button id="btn-reset" class="pill">↺ Reset impacts</button>
           <button id="btn-now" class="pill">⏱ Jump to now</button>
         </div>
         <p class="hint" id="osm-status">Roads: approximate major corridors.</p>
+        <button id="btn-save-osm" class="pill" hidden>⬇ Save map data</button>
       </section>
       <section class="about">
         <details>
@@ -136,6 +137,12 @@
       <section>
         <h3>Carolina Day School status</h3>
         <div id="school"></div>
+      </section>
+      <section>
+        <h3>Campus operations</h3>
+        <div id="ops"></div>
+        <details class="bldgs"><summary>Buildings</summary><div id="ops-bldgs"></div></details>
+        <p class="hint" id="ops-assumed">Generator, network and route details are placeholder assumptions until CDS Facilities and IT confirm them (src/data/campus-ops.js).</p>
       </section>
       <section>
         <h3>Accumulations</h3>

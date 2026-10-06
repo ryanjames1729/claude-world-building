@@ -8,7 +8,25 @@ const ENDPOINTS = [
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ];
 
+let lastRaw = null;
+
+/** Saves the loaded OpenStreetMap data so it can be baked into the app (data/osm-snapshot.json). */
+export function saveOSMSnapshot() {
+  if (!lastRaw) return false;
+  const blob = new Blob([JSON.stringify(lastRaw)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'osm-snapshot.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  return true;
+}
+
 export async function loadOSM(onStatus) {
+  // a snapshot shipped with the app wins: faster, works offline, and doesn't depend on Overpass being up
+  if (location.protocol.startsWith('http')) try {
+    const res = await fetch('data/osm-snapshot.json');
+    if (res.ok) { lastRaw = await res.json(); return { ...parse(lastRaw), source: 'snapshot' }; }
+  } catch { /* no snapshot (or opened from file://) */ }
   const { lat, lon } = CENTER;
   const R = Math.round(RADIUS_M + 600);
   const q = `[out:json][timeout:60];
@@ -18,6 +36,7 @@ export async function loadOSM(onStatus) {
   way["building"](around:1300,${lat},${lon});
   way["amenity"="school"](around:3000,${lat},${lon});
   way["leisure"~"^(pitch|track)$"](around:1300,${lat},${lon});
+  node["highway"="traffic_signals"](around:${R},${lat},${lon});
 );
 out tags geom;`;
   let lastErr;
@@ -31,16 +50,18 @@ out tags geom;`;
       clearTimeout(timer);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      return parse(json);
+      lastRaw = json;
+      return { ...parse(json), source: 'live' };
     } catch (e) { lastErr = e; }
   }
   throw lastErr || new Error('OSM unavailable');
 }
 
 function parse(json) {
-  const roads = [], buildings = [], pitches = [];
+  const roads = [], buildings = [], pitches = [], signals = [];
   let school = null;
   for (const el of json.elements || []) {
+    if (el.type === 'node' && el.tags?.highway === 'traffic_signals') { signals.push([el.lat, el.lon]); continue; }
     if (el.type !== 'way' || !el.geometry) continue;
     const t = el.tags || {};
     const pts = el.geometry.map((g) => [g.lat, g.lon]);
@@ -51,5 +72,5 @@ function parse(json) {
     } else if (t.leisure) pitches.push({ pts, kind: t.leisure });
     if (t.amenity === 'school' && /carolina day/i.test(t.name || '')) school = { pts, name: t.name };
   }
-  return { roads, buildings, pitches, school };
+  return { roads, buildings, pitches, school, signals };
 }

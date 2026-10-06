@@ -80,9 +80,9 @@ export function buildLandcover(hydro) {
   return { tex, data, cover };
 }
 
-export function terrainMaterial(landTex) {
+export function terrainMaterial(landTex, campusGround) {
   return new THREE.ShaderMaterial({
-    uniforms: { ...U, uLand: { value: landTex } },
+    uniforms: { ...U, uLand: { value: landTex }, uCampusTex: { value: campusGround?.tex || null }, uCampusRect: { value: campusGround?.rect || new THREE.Vector4(0, 0, 1, 0) } },
     vertexShader: /* glsl */`
       attribute float aHand; attribute float aDrainElev; attribute float aClass;
       varying vec3 vPos; varying vec3 vNormal; varying vec2 vUv; varying float vElev;
@@ -96,7 +96,7 @@ export function terrainMaterial(landTex) {
       }`,
     fragmentShader: /* glsl */`
       ${GLSL_COMMON}
-      uniform sampler2D uLand;
+      uniform sampler2D uLand; uniform sampler2D uCampusTex; uniform vec4 uCampusRect;
       varying vec3 vPos; varying vec3 vNormal; varying vec2 vUv; varying float vElev;
       varying float vHand; varying float vClass; varying float vDrainElev;
       void main(){
@@ -123,6 +123,16 @@ export function terrainMaterial(landTex) {
         vec3 urban = mix(vec3(.36,.36,.35), vec3(.47,.45,.42), fine);
         vec3 open = mix(grass, urban, paved);
         vec3 col = mix(canopy, open, smoothstep(.35, .75, dev));
+        // campus ground (lawns, lots, fields) digitized from the campus map
+        if (uCampusRect.w > .5) {
+          vec2 cuv = (vPos.xz - uCampusRect.xy) / uCampusRect.z;
+          if (cuv.x > 0. && cuv.x < 1. && cuv.y > 0. && cuv.y < 1.) {
+            vec4 cg = texture2D(uCampusTex, vec2(cuv.x, 1. - cuv.y));
+            vec3 cc = cg.rgb;
+            if (cc.g > cc.r * 1.15) cc = mix(cc, vec3(.45,.43,.30), (1. - leafAt(vElev)) * .6); // dormant winter lawn
+            col = mix(col, cc, cg.a);
+          }
+        }
         // rock on the steepest slopes
         col = mix(col, vec3(.38,.36,.33), smoothstep(.45, .7, slope) * .6);
         // stream channels

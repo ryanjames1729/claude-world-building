@@ -11,8 +11,9 @@ import { createSky, createClouds, createFogSheet } from './render/sky.js';
 import { createPrecip, createLightning } from './render/precip.js';
 import { createForest } from './render/trees.js';
 import { createCampus, structureMaterial, drapedRect } from './render/campus.js';
-import { FALLBACK_ROADS, buildRoads, makeRoadEvaluator } from './render/roads.js';
-import { loadOSM } from './render/osm.js';
+import { buildRoads, makeRoadEvaluator, fallbackRoads, campusDrives, fallbackSignals } from './render/roads.js';
+import { loadOSM, saveOSMSnapshot } from './render/osm.js';
+import { inCampus } from './campus-geo.js';
 import { Labels } from './render/labels.js';
 import { UI } from './ui.js';
 
@@ -48,19 +49,21 @@ async function main() {
   await nextFrame();
   const geo = buildTerrainGeometry(hydro);
   const land = buildLandcover(hydro);
-  const terrain = new THREE.Mesh(geo, terrainMaterial(land.tex));
+  const labels = new Labels(document.getElementById('app'));
+  const campus = createCampus(labels);
+  scene.add(campus.group);
+  const terrain = new THREE.Mesh(geo, terrainMaterial(land.tex, campus.ground));
   const water = new THREE.Mesh(geo, waterMaterial());
   water.renderOrder = 3;
   scene.add(terrain, water);
 
-  const campus = createCampus();
-  scene.add(campus.group);
-  const forest = createForest(land, campus.avoid, mobile ? 0.45 : 1);
+  const forest = createForest(land, campus.avoid, mobile ? 0.45 : 1, campus.extraTrees);
   scene.add(forest.group);
 
-  let roads = buildRoads(FALLBACK_ROADS, hydro);
+  const FALLBACK = fallbackRoads();
+  let roads = buildRoads(FALLBACK, hydro, land.cover);
   scene.add(roads.mesh);
-  sim.roadEvaluator = makeRoadEvaluator(roads, hydro);
+  sim.roadEvaluator = makeRoadEvaluator(roads, hydro, fallbackSignals(FALLBACK));
 
   const sky = createSky();
   scene.add(sky.mesh);
@@ -73,12 +76,11 @@ async function main() {
   const lightning = createLightning(scene);
 
   // ---- labels
-  const labels = new Labels(document.getElementById('app'));
   const lbl = (text, lat, lon, opts = {}) => {
     const p = llToXZ(lat, lon);
     return labels.add(text, new THREE.Vector3(p.x, groundY(p.x, p.z) + (opts.lift ?? 40), p.z), opts);
   };
-  const schoolLabel = labels.add('Carolina Day School', new THREE.Vector3(0, groundY(0, 0) + 45, 0), { cls: 'school', group: 'school' });
+  labels.add('Carolina Day School', new THREE.Vector3(0, groundY(0, 0) + 75, 0), { cls: 'school', group: 'school', minDist: 900, priority: 2 });
   lbl('Downtown Asheville', 35.5951, -82.5515, { maxDist: 60000 });
   lbl('Biltmore House', 35.5406, -82.5524);
   lbl('Biltmore Village', 35.5665, -82.5446);
@@ -106,7 +108,7 @@ async function main() {
       roadLabels.push(labels.add(w.name, new THREE.Vector3(p.x, groundY(p.x, p.z) + 20, p.z), { cls: 'road', group: 'road', maxDist: 14000 }));
     }
   };
-  labelRoads(FALLBACK_ROADS);
+  labelRoads(FALLBACK);
 
   // ---- camera & controls
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -119,7 +121,7 @@ async function main() {
   const at = (lat, lon) => { const p = llToXZ(lat, lon); return new THREE.Vector3(p.x, groundY(p.x, p.z), p.z); };
   const campusT = new THREE.Vector3(0, groundY(0, 0), 0);
   const cameraPresets = [
-    { id: 'campus', label: '🏫 Campus', target: campusT, offset: new THREE.Vector3(380, 260, 520) },
+    { id: 'campus', label: '🏫 Campus', target: campusT, offset: new THREE.Vector3(260, 300, 480) },
     { id: 'overview', label: '🗺 5-mile view', target: campusT, offset: new THREE.Vector3(2500, 11500, 12500) },
     { id: 'biltmore', label: '🌊 Biltmore Village', target: at(35.5655, -82.548), offset: new THREE.Vector3(1100, 900, 1500) },
     { id: 'river', label: '🏞 French Broad', target: at(35.545, -82.565), offset: new THREE.Vector3(-1800, 1400, 2200) },
@@ -138,7 +140,7 @@ async function main() {
   const layers = { labels: true, ring: true, roads: true, roadStatus: false, trees: true, clouds: true, precip: true };
   let playing = true;
   const app = {
-    layers, cameraPresets, flyTo,
+    layers, cameraPresets, flyTo, saveOSMSnapshot,
     speed: 0.166667,
     togglePlay() { playing = !playing; ui.setPlaying(playing); },
     play(p) { playing = p; ui.setPlaying(playing); },
@@ -167,39 +169,32 @@ async function main() {
     if (osm.roads.length < 20) throw new Error('too few roads');
     scene.remove(roads.mesh);
     roads.mesh.geometry.dispose();
-    roads = buildRoads(osm.roads, hydro);
+    roads = buildRoads([...osm.roads, ...campusDrives()], hydro, land.cover);
     scene.add(roads.mesh);
-    sim.roadEvaluator = makeRoadEvaluator(roads, hydro);
+    const signals = osm.signals.length ? osm.signals.map(([la, lo]) => llToXZ(la, lo)) : fallbackSignals(FALLBACK);
+    sim.roadEvaluator = makeRoadEvaluator(roads, hydro, signals);
     labelRoads(osm.roads);
-    let near = 0;
     const bgroup = new THREE.Group();
     const wallMat = structureMaterial(0xb9a68e), houseMat = structureMaterial(0xc9c2b4);
     for (const b of osm.buildings) {
       const pts = b.pts.map(([la, lo]) => llToXZ(la, lo));
-      if (pts.length < 4) continue;
+      if (pts.length < 4 || inCampus(pts[0].x, pts[0].z)) continue; // campus buildings come from the campus map
       let lo = Infinity; for (const p of pts) lo = Math.min(lo, groundY(p.x, p.z));
       const shape = new THREE.Shape(pts.map((p) => new THREE.Vector2(p.x, -p.z)));
       const h = b.h * 1.3 + 4;
       const g = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false }).rotateX(-Math.PI / 2);
       g.translate(0, lo - 3, 0);
       bgroup.add(new THREE.Mesh(g, b.type === 'house' || b.type === 'residential' ? houseMat : wallMat));
-      if (Math.hypot(pts[0].x, pts[0].z) < 450) near++;
     }
     for (const p of osm.pitches) {
       const pts = p.pts.map(([la, lo]) => llToXZ(la, lo));
-      if (pts.length < 4) continue;
+      if (pts.length < 4 || inCampus(pts[0].x, pts[0].z)) continue;
       const xs = pts.map((q) => q.x), zs = pts.map((q) => q.z);
       const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
       bgroup.add(drapedRect(cx, cz, Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs), 0, p.kind === 'track' ? 0x9a4a3a : 0x3f7a35, true));
     }
     scene.add(bgroup);
-    if (osm.school) {
-      const pts = osm.school.pts.map(([la, lo]) => llToXZ(la, lo));
-      const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length, cz = pts.reduce((a, p) => a + p.z, 0) / pts.length;
-      schoolLabel.pos.set(cx, groundY(cx, cz) + 45, cz);
-    }
-    if (near >= 3) { campus.group.visible = false; }
-    ui.setOSMStatus(`Real roads & ${osm.buildings.length} buildings loaded from OpenStreetMap.`);
+    ui.setOSMStatus(`Real roads, ${osm.signals.length} traffic signals & ${osm.buildings.length} buildings loaded from OpenStreetMap${osm.source === 'snapshot' ? ' (saved copy)' : ''}.`, osm.source === 'live');
   }).catch(() => ui.setOSMStatus('Roads: approximate major corridors (OpenStreetMap unavailable offline).'));
 
   // ---- per-frame visual sync from simulation state
@@ -249,6 +244,11 @@ async function main() {
     U.uShowRing.value = layers.ring ? 1 : 0;
     U.uRoadIce.value = sim.campus.tempC < 0.5 ? sim.roadIce : 0;
     U.uRoadStatus.value = layers.roadStatus ? 1 : 0;
+    for (const [id, b] of Object.entries(campus.buildings)) {
+      const st = sim.ops.buildings[id];
+      b.mat.uniforms.uPowered.value = st === 'none' ? 0 : 1;
+      b.mat.uniforms.uStatusColor.value.setRGB(...(st === 'utility' ? [0.2, 0.8, 0.35] : st === 'generator' ? [1, 0.75, 0.1] : [1, 0.15, 0.1]));
+    }
     sky.uniforms.uCloud.value = w.cloud;
     sky.uniforms.uStorm.value = storm;
     sky.uniforms.uSunElev.value = Math.sin(el);

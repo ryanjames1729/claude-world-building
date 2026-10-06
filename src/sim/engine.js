@@ -4,6 +4,7 @@
 import { elev, N, slopeDeg, mulberry32, REF_ELEV_M } from '../geo.js';
 import { ClimateGenerator, cToF, fToC } from './climate.js';
 import { SCENARIOS } from './scenarios.js';
+import { CampusOps, LEVEL } from './ops.js';
 import { HOUR, DAY, parseLocal, hourOfDay, dayOfYear, sunPosition, isSchoolDay, localMs } from './clock.js';
 
 export const BANDS = 8;
@@ -46,6 +47,7 @@ export class Simulation {
     this.roadEvaluator = null;
     this.bandAreaFrac = this.computeBandAreas();
     this.slideCandidates = this.computeSlideCandidates();
+    this.ops = new CampusOps(mulberry32(seed + 11));
     const now = new Date();
     this.reset(localMs(now.getFullYear(), now.getMonth() + 1, now.getDate(), 7, 0));
   }
@@ -88,6 +90,7 @@ export class Simulation {
     this.stages = new Float32Array(4);
     this.updateStages();
     this.treesDownFrac = 0;
+    this.clearance = 0;          // 0..1 progress of crews clearing fallen trees off roads
     this.powerOut = 0;
     this.landslides = [];
     this.rainTotalMm = 0;
@@ -98,6 +101,8 @@ export class Simulation {
     this.lastHist = -Infinity;
     this.decisions = new Map();
     this.roads = null;
+    this.ops?.reset();
+    this.opsReport = null;
     this.note = '';
     this.alerts = [];
     // spin up the weather so it isn't stuck at defaults
@@ -288,6 +293,11 @@ export class Simulation {
     const remaining = 1 - this.treesDownFrac;
     this.treesDownFrac += remaining * Math.min(0.5, (windRate + iceRate) * dtH);
 
+    // --- road crews clear fallen trees once it's safe: main roads in ~2 days, side streets in ~4
+    const newDamage = (windRate + iceRate) * dtH * remaining;
+    if (newDamage > 2e-4) this.clearance = Math.max(0, this.clearance - newDamage * 20);
+    else if (gustMph < 30 && iceIn < 0.1) this.clearance = Math.min(1, this.clearance + dtH / 96);
+
     // --- power: damage drives outages; crews restore after the weather calms
     const target = Math.min(0.97, this.treesDownFrac * 4 + Math.max(0, iceIn - 0.2) * 0.6 + Math.max(0, gustMph - 45) * 0.012);
     if (target > this.powerOut) this.powerOut += (target - this.powerOut) * Math.min(1, dtH * 1.5);
@@ -304,6 +314,8 @@ export class Simulation {
 
     // --- roads, alerts, school decisions, history
     if (this.roadEvaluator) this.roads = this.roadEvaluator(this);
+    this.ops.step(this, dtH);
+    this.opsReport = this.ops.report(this);
     this.alerts = this.computeAlerts();
     this.checkSchoolDecision(dtH);
     if (this.t - this.lastHist >= 0.5 * HOUR) {
@@ -438,6 +450,17 @@ export class Simulation {
     if (w.gustMs * MPH >= 50) close('Dangerous wind gusts');
     if (this.visibilityMi() < 0.3) delay('Dense fog');
     if (this.gaugeFt(3) >= 12 || this.riseM(1) > 1.6) close('Flooding on area roads and rivers');
+    // Campus operations: power, network and the routes families drive
+    const ops = this.opsReport;
+    if (ops) {
+      if (ops.power.level === LEVEL.critical) close('Campus buildings without power');
+      else if (!this.ops.utilityOn) delay('Campus running on generator power');
+      if (!this.ops.internetUp) { if (this.ops.cell === 'mostly down') close('No internet, phones or reliable cell service on campus'); else delay('Campus internet down'); }
+      const routesClosed = ops.roads.familiesAffected || 0;
+      if (routesClosed >= 0.3) close(`Main routes closed for ~${Math.round(routesClosed * 100)}% of families`);
+      else if (routesClosed > 0) delay(`Some family routes closed (~${Math.round(routesClosed * 100)}% of families)`);
+      if (r && r.signalsOut >= 2) delay(`${r.signalsOut} traffic signals dark on area roads`);
+    }
     // In scenarios the storm's future is known, so leaders can act on the forecast (as they did before Helene).
     const fc = this.forecast(20);
     if (fc) {

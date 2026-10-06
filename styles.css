@@ -88,6 +88,20 @@ h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing
 .status.weekend { background: rgba(255,255,255,.06); color: var(--muted); }
 .reasons { margin: 6px 0 0; padding-left: 18px; font-size: 12px; }
 .hist { margin-top: 6px; font-size: 11px; color: var(--muted); }
+.opscard { border-radius: 9px; padding: 7px 9px; margin-bottom: 6px; background: rgba(255,255,255,.04); border-left: 4px solid var(--ok); }
+.opscard.l1 { border-color: var(--adv); background: rgba(245,209,66,.08); }
+.opscard.l2 { border-color: var(--extreme); background: rgba(255,61,110,.12); }
+.opscard .hd { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.opscard .cat { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.opscard .ttl { font-weight: 700; font-size: 12.5px; }
+.opscard ul { margin: 4px 0 0; padding-left: 16px; font-size: 11.5px; color: var(--text); opacity: .9; }
+.pillst { font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 99px; background: rgba(62,207,115,.2); color: #6ee79a; white-space: nowrap; }
+.pillst.l1 { background: rgba(245,209,66,.2); color: #f5d142; }
+.pillst.l2 { background: rgba(255,61,110,.22); color: #ff7095; }
+.bldgs summary { cursor: pointer; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.brow { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; padding: 2px 0; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.legend-note { flex-basis: 100%; color: var(--muted); }
 .bar-label { margin-top: 10px; font-size: 11px; color: var(--muted); }
 .bar-label span { float: right; color: var(--text); }
 .bar { position: relative; height: 8px; background: rgba(255,255,255,.08); border-radius: 4px; overflow: visible; margin-top: 3px; }
@@ -113,6 +127,9 @@ h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing
 .label.school::after { bottom: -6px; background: var(--accent); }
 .label.river { color: #9fd3ff; font-style: italic; }
 .label.road { color: #ffe08a; font-size: 10.5px; }
+.label.bldg { font-size: 11px; background: rgba(14,20,28,.72); padding: 2px 6px 2px; border-radius: 5px; text-shadow: none; margin-top: -4px; }
+.label.bldg::after { bottom: -6px; }
+.label.campus-pt { font-size: 10.5px; color: #d6f5c4; font-weight: 500; }
 .label.peak { color: #d9e2ec; font-size: 10.5px; }
 
 @media (max-width: 900px) {
