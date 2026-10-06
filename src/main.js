@@ -12,7 +12,8 @@ import { createPrecip, createLightning } from './render/precip.js';
 import { createForest } from './render/trees.js';
 import { createCampus, structureMaterial, drapedRect } from './render/campus.js';
 import { buildRoads, makeRoadEvaluator, fallbackRoads, campusDrives, fallbackSignals } from './render/roads.js';
-import { loadOSM, saveOSMSnapshot } from './render/osm.js';
+import { loadOSM, saveOSMSnapshot, bakedOSM } from './render/osm.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { inCampus } from './campus-geo.js';
 import { Labels } from './render/labels.js';
 import { createTraffic } from './render/cars.js';
@@ -174,8 +175,8 @@ async function main() {
   sim.on('reset', () => { clearScars(land); forest.reset(); peakStage.fill(0); });
   app.jumpToNow();
 
-  // ---- OpenStreetMap detail (real roads & buildings) when online
-  loadOSM((t) => ui.setOSMStatus(t)).then((osm) => {
+  // ---- OpenStreetMap detail (real roads, signals & buildings): baked into the app, or fetched live if not
+  const applyOSM = (osm) => {
     if (osm.roads.length < 20) throw new Error('too few roads');
     scene.remove(roads.mesh);
     roads.mesh.geometry.dispose();
@@ -187,6 +188,7 @@ async function main() {
     labelRoads(osm.roads);
     const bgroup = new THREE.Group();
     const wallMat = structureMaterial(0xb9a68e), houseMat = structureMaterial(0xc9c2b4);
+    const houseGeos = [], otherGeos = [];
     for (const b of osm.buildings) {
       const pts = b.pts.map(([la, lo]) => llToXZ(la, lo));
       if (pts.length < 4 || inCampus(pts[0].x, pts[0].z)) continue; // campus buildings come from the campus map
@@ -195,8 +197,10 @@ async function main() {
       const h = b.h * 1.3 + 4;
       const g = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false }).rotateX(-Math.PI / 2);
       g.translate(0, lo - 3, 0);
-      bgroup.add(new THREE.Mesh(g, b.type === 'house' || b.type === 'residential' ? houseMat : wallMat));
+      (b.type === 'house' || b.type === 'residential' ? houseGeos : otherGeos).push(g.index ? g.toNonIndexed() : g);
     }
+    // one draw call per material instead of one per building
+    for (const [geos, mat] of [[houseGeos, houseMat], [otherGeos, wallMat]]) if (geos.length) bgroup.add(new THREE.Mesh(mergeGeometries(geos), mat));
     for (const p of osm.pitches) {
       const pts = p.pts.map(([la, lo]) => llToXZ(la, lo));
       if (pts.length < 4 || inCampus(pts[0].x, pts[0].z)) continue;
@@ -205,8 +209,12 @@ async function main() {
       bgroup.add(drapedRect(cx, cz, Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs), 0, p.kind === 'track' ? 0x9a4a3a : 0x3f7a35, true));
     }
     scene.add(bgroup);
-    ui.setOSMStatus(`Real roads, ${osm.signals.length} traffic signals & ${osm.buildings.length} buildings loaded from OpenStreetMap${osm.source === 'snapshot' ? ' (saved copy)' : ''}.`, osm.source === 'live');
-  }).catch(() => ui.setOSMStatus('Roads: approximate major corridors (OpenStreetMap unavailable offline).'));
+    const when = osm.date ? ` (map data as of ${new Date(osm.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})` : '';
+    ui.setOSMStatus(`Real roads, ${osm.signals.length} traffic signals & ${osm.buildings.length} buildings from OpenStreetMap${when}. © OpenStreetMap contributors.`, osm.source === 'live');
+  };
+  const baked = bakedOSM();
+  if (baked) applyOSM(baked);
+  else loadOSM((t) => ui.setOSMStatus(t)).then(applyOSM).catch(() => ui.setOSMStatus('Roads: approximate major corridors (OpenStreetMap unavailable offline).'));
 
   // ---- per-frame visual sync from simulation state
   const sunV = new THREE.Vector3();

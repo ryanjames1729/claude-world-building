@@ -23,7 +23,7 @@ CDS Weather World is a web app. It runs in any modern browser (Chrome, Edge, Saf
 
 Phones and tablets automatically get a lighter scene, with fewer trees and particles and a lower render resolution, so it stays smooth. On a computer: drag to orbit, right-drag to pan, scroll to zoom, and press **space** to play or pause. On touch screens: one finger orbits, two fingers zoom and pan. The **Controls** and **Conditions** buttons open panels from the bottom of the screen. The camera buttons jump to the campus, the 5-mile overview, Biltmore Village, the French Broad, downtown or a ridge-top view.
 
-When the browser is online, the app also loads **real roads and building footprints from OpenStreetMap**, which replace the schematic campus and the approximate highway lines.
+Real roads, traffic signals and neighborhood buildings come from a built-in OpenStreetMap snapshot, so the app works offline.
 
 ## The campus
 
@@ -55,7 +55,7 @@ Animated cars follow the road network. Traffic follows weekday rush hours and we
 
 **Confirmed by CDS:** the campus has **no generators**, all buildings are linked by **underground fiber**, the network battery lasts **about 30 minutes**, and desk phones are **powered over the network (PoE)**, so they go dark when the network does. With no outside phone line, the app flags when campus has no reliable way to call 911 (desk phones down and cell service failing). Two separate providers (**primary and backup ISP**) enter campus through an **underground fiber vault**; if the primary is cut, traffic fails over to the backup. **Still assumed:** how exposed each provider's line is to poles and trees off campus, whether outside calls need the internet (hosted phone service), and the family route shares. These are in `src/data/campus-ops.js`, and the app labels them as assumed. Ask Facilities and IT to correct them. Keep the details general, because this file ships with the public web app: no IP addresses, equipment models or network diagrams.
 
-**Real roads and signals:** when the app is online it loads OpenStreetMap roads, traffic signals and neighborhood buildings. Click **⬇ Save map data**, then commit the file it saves as `data/osm-snapshot.json`. The app will then load real roads instantly and offline.
+**Real roads, signals and neighborhoods:** a snapshot of OpenStreetMap from Oct 6, 2026 is built into the app. It has 1,638 road segments, from interstates down to neighborhood streets, plus 215 traffic signals, 990 building footprints and the CDS property outline. It loads instantly and works offline. It also confirms the GPS placement: the campus entrances land within about 10 m of the real Hendersonville Road, and 9 of 10 campus buildings fall inside the OSM school outline. To refresh it, click **⬇ Save map data** in a build without a baked snapshot, save the file as `data/osm-snapshot.json`, and run `node scripts/bake-osm.mjs`. Map data © OpenStreetMap contributors, available under the Open Database License (ODbL).
 
 ## What's modeled
 

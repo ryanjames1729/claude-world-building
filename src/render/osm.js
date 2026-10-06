@@ -1,6 +1,22 @@
 // Optional real-world detail from OpenStreetMap (© OpenStreetMap contributors, ODbL),
 // fetched in the browser from the public Overpass API. Falls back gracefully when offline.
 import { CENTER, RADIUS_M } from '../geo.js';
+import { OSM } from '../data/osm.js';
+
+const pairs = (flat) => { const out = []; for (let i = 0; i < flat.length; i += 2) out.push([flat[i], flat[i + 1]]); return out; };
+
+/** The OpenStreetMap snapshot baked into the app (scripts/bake-osm.mjs), or null if none was baked. */
+export function bakedOSM() {
+  if (!OSM || !OSM.roads?.length) return null;
+  return {
+    source: 'baked', date: OSM.source,
+    roads: OSM.roads.map((r) => ({ name: r.n, kind: r.k, pts: pairs(r.p) })),
+    buildings: OSM.buildings.map((b) => ({ pts: pairs(b.p), h: b.h, type: b.t })),
+    pitches: OSM.pitches.map((p) => ({ kind: p.k, pts: pairs(p.p) })),
+    signals: pairs(OSM.signals),
+    school: OSM.school ? { name: OSM.school.n, pts: pairs(OSM.school.p) } : null,
+  };
+}
 
 const ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
