@@ -22,8 +22,16 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeou
 async function main() {
   const loadingText = document.getElementById('loading-text');
   const canvas = document.getElementById('scene');
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, logarithmicDepthBuffer: false, preserveDrawingBuffer: false });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // Phones and tablets get a lighter scene (fewer trees and particles, lower resolution) to stay smooth.
+  const mobile = window.matchMedia('(pointer: coarse)').matches || Math.min(window.innerWidth, window.innerHeight) < 600;
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: !mobile, powerPreference: 'high-performance' });
+  } catch (e) {
+    throw new Error('This browser or device does not support WebGL, which the 3D view needs. Try a recent Chrome, Safari, Edge or Firefox, and make sure hardware acceleration is turned on.');
+  }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.5 : 2));
+  canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); document.getElementById('loading-text').textContent = 'The graphics context was lost. Reload the page to continue.'; document.getElementById('loading').classList.remove('done'); });
   renderer.setSize(window.innerWidth, window.innerHeight, false);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
@@ -47,7 +55,7 @@ async function main() {
 
   const campus = createCampus();
   scene.add(campus.group);
-  const forest = createForest(land, campus.avoid);
+  const forest = createForest(land, campus.avoid, mobile ? 0.45 : 1);
   scene.add(forest.group);
 
   let roads = buildRoads(FALLBACK_ROADS, hydro);
@@ -60,7 +68,7 @@ async function main() {
   scene.add(clouds.group);
   const fogSheet = createFogSheet();
   scene.add(fogSheet);
-  const precip = createPrecip();
+  const precip = createPrecip(mobile ? 0.5 : 1);
   scene.add(precip.group);
   const lightning = createLightning(scene);
 
@@ -137,6 +145,7 @@ async function main() {
     jumpToNow() { const d = new Date(); sim.reset(localMs(d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes())); },
   };
   const ui = new UI(sim, app);
+  if (mobile) document.getElementById('cam-hint').textContent = 'One finger to orbit · two fingers to zoom and pan';
   window.addEventListener('keydown', (e) => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); app.togglePlay(); } });
 
   // ---- events
@@ -303,7 +312,13 @@ async function main() {
   frame();
 }
 
+// Installable web app: cache the app files so it opens offline (only works when served over http/https).
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+
 main().catch((e) => {
   console.error(e);
-  document.getElementById('loading-text').textContent = 'Something went wrong starting the simulation: ' + e.message;
+  document.getElementById('loading-text').textContent = e.message.startsWith('This browser') ? e.message : 'Something went wrong starting the simulation: ' + e.message;
+  document.querySelector('#loading .spinner')?.remove();
 });

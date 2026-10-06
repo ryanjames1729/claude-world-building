@@ -2,7 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0e141c" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CDS Weather" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <title>CDS Weather World</title>
   <meta name="description" content="A 3D weather and hazards simulation of Carolina Day School and a 5-mile radius around it in Asheville, NC." />
   <link rel="stylesheet" href="styles.css" />
@@ -34,6 +42,7 @@
     </header>
 
     <aside id="left" class="panel">
+      <button class="panel-close" aria-label="Close controls">✕</button>
       <section>
         <h3>Weather mode</h3>
         <div class="seg" id="mode-seg">
@@ -73,7 +82,7 @@
       <section>
         <h3>Camera</h3>
         <div class="presets" id="cam-presets"></div>
-        <p class="hint">Drag to orbit · right-drag to pan · scroll to zoom</p>
+        <p class="hint" id="cam-hint">Drag to orbit · right-drag to pan · scroll to zoom</p>
       </section>
 
       <section>
@@ -109,6 +118,7 @@
     </aside>
 
     <aside id="right" class="panel">
+      <button class="panel-close" aria-label="Close conditions">✕</button>
       <section class="now">
         <div class="now-main">
           <div id="now-temp" class="big">—</div>

@@ -3,7 +3,7 @@ import { N, CELL, HALF_EXTENT_M, elevationAt, elevToY, mulberry32, slopeDeg, cel
 import { U, GLSL_COMMON } from './common.js';
 
 // Instanced forest near campus. Each tree knows when (if ever) it fell, and in which direction.
-const COUNT_NEAR = 26000, COUNT_FAR = 14000;
+const BASE_NEAR = 26000, BASE_FAR = 14000;
 
 function treeMaterial(kind) {
   return new THREE.ShaderMaterial({
@@ -86,7 +86,8 @@ function buildGeometry(kind) {
   return merged;
 }
 
-export function createForest(landcover, campusAvoid) {
+export function createForest(landcover, campusAvoid, density = 1) {
+  const COUNT_NEAR = Math.round(BASE_NEAR * density), COUNT_FAR = Math.round(BASE_FAR * density);
   const rnd = mulberry32(2024);
   const recs = [];
   const tryPlace = (x, z) => {

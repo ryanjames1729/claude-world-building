@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { U } from './common.js';
 
 // Precipitation particles live in a box that follows the camera and are animated entirely on the GPU.
-const RAIN_N = 14000, SNOW_N = 16000;
+const BASE_RAIN = 14000, BASE_SNOW = 16000;
 
 function particleMaterial(kind) {
   return new THREE.ShaderMaterial({
@@ -38,7 +38,8 @@ function particleMaterial(kind) {
   });
 }
 
-export function createPrecip() {
+export function createPrecip(scale = 1) {
+  const RAIN_N = Math.round(BASE_RAIN * scale), SNOW_N = Math.round(BASE_SNOW * scale);
   const rnd = Math.random;
   // rain: line segments (2 verts per drop)
   const rg = new THREE.BufferGeometry();

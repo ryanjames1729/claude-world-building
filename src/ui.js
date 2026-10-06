@@ -36,7 +36,8 @@ export class UI {
     if (color) d.style.borderLeftColor = color;
     $('toasts').appendChild(d);
     setTimeout(() => d.remove(), 5000);
-    while ($('toasts').children.length > 4) $('toasts').firstChild.remove();
+    const max = window.innerWidth < 900 ? 2 : 4;
+    while ($('toasts').children.length > max) $('toasts').firstChild.remove();
   }
 
   bindTop() {
@@ -50,6 +51,7 @@ export class UI {
     };
     $('btn-now').onclick = () => { if (this.sim.mode === 'scenario') this.setMode('auto'); this.app.jumpToNow(); };
     $('btn-reset').onclick = () => this.sim.reset(this.sim.t, { soil: this.sim.soil });
+    for (const b of document.querySelectorAll('.panel-close')) b.onclick = () => b.closest('.panel').classList.remove('open');
     for (const side of ['left', 'right']) {
       $('toggle-' + side).onclick = () => {
         const other = side === 'left' ? 'right' : 'left';

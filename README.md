@@ -13,11 +13,15 @@ You can run Asheville's normal day-to-day climate, take manual control of the we
 | **Summer flash-flood thunderstorm** | Lightning, downbursts and 2"+/hr rain: creeks spike in minutes, but the French Broad barely moves. |
 | **October valley fog & fall color** | Radiation fog fills the valleys, so only the ridges poke above a "sea of clouds"; peak fall color. |
 
-## Running it
+## Running it (computer, phone or tablet)
 
-No install needed. Open `index.html` in a modern browser (Chrome, Edge, Safari or Firefox). The bundled build in `dist/` works straight from the file system or from any static host, such as GitHub Pages.
+CDS Weather World is a web app. It runs in any modern browser (Chrome, Edge, Safari, Firefox) on a computer, phone or tablet. There's nothing to install.
 
-Controls: drag to orbit, right-drag to pan, scroll to zoom, and press **space** to play or pause. Use the camera buttons to jump to the campus, the 5-mile overview, Biltmore Village, the French Broad, downtown or a ridge-top view.
+- **Public URL (recommended):** once this repo is on `main`, the included GitHub Actions workflow builds, tests and publishes it to GitHub Pages at `https://<user>.github.io/claude-video-testing/`. One-time setup: **Settings → Pages → Source: GitHub Actions**. Share that link with students.
+- **Install it like an app:** on a phone, open the link, then choose *Share → Add to Home Screen* (iPhone/iPad) or *Install app* (Android/Chrome). It opens full screen with its own icon. After the first visit it also works **offline**, except for the optional OpenStreetMap layer.
+- **Locally:** run `npm run dev` and open http://localhost:8000. You can also open `index.html` directly, but offline mode needs it served over http(s).
+
+Phones and tablets automatically get a lighter scene, with fewer trees and particles and a lower render resolution, so it stays smooth. On a computer: drag to orbit, right-drag to pan, scroll to zoom, and press **space** to play or pause. On touch screens: one finger orbits, two fingers zoom and pan. The **Controls** and **Conditions** buttons open panels from the bottom of the screen. The camera buttons jump to the campus, the 5-mile overview, Biltmore Village, the French Broad, downtown or a ridge-top view.
 
 When the browser is online, the app also loads **real roads and building footprints from OpenStreetMap**, which replace the schematic campus and the approximate highway lines.
 
