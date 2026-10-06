@@ -150,7 +150,7 @@ export class UI {
     const heavy = w.precip > (pt === 'rain' ? 7.6 : 2.5) ? 'Heavy ' : w.precip < (pt === 'rain' ? 1 : 0.3) ? 'Light ' : '';
     $('now-type').textContent = pt === 'none' ? (w.fog > 0.5 ? '🌫 Fog' : w.cloud > 0.8 ? '☁️ Overcast' : w.cloud > 0.35 ? '⛅ Partly cloudy' : s.sun.elevation > 0 ? '☀️ Clear' : '🌙 Clear') + (w.thunder > 0.1 ? ' · ⚡' : '')
       : `${ICON[pt]} ${heavy}${PTYPE_LABEL[pt].toLowerCase()}${w.thunder > 0.1 ? ' · ⚡ thunder' : ''}`;
-    $('now-label').textContent = `Feels like ${Math.round(s.feelsLikeF())}° · at campus (~2,130 ft)`;
+    $('now-label').textContent = `Feels like ${Math.round(s.feelsLikeF())}° · at campus (~2,180 ft)`;
     $('now-grid').innerHTML = [
       kv('Wind', `${compass(w.windDir)} ${Math.round(w.windMs * MPH)} mph`),
       kv('Gusts', `${Math.round(w.gustMs * MPH)} mph`),

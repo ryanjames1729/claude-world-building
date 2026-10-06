@@ -8,11 +8,18 @@ export const GEOREF = {
   // Scale measured against satellite imagery (docs/campus-satellite.png): home plate to the back of the infield
   // dirt on Marberger Field (~47 m on a regulation diamond) and South Lot parking modules (~18 m) both give
   // ~0.31 m per satellite pixel, and the campus map is drawn ~1.18× smaller than that view → ~0.37 m per map pixel.
-  metersPerPx: 0.37,
+  metersPerPx: 0.37,          // superseded by the GPS CONTROL_POINTS below (fit ≈ 0.49 m/px)
   rotationDeg: 0,            // the map's north arrow points straight up
 };
-// Optional: [{ px: [x, y], lat, lon }, { px: [x, y], lat, lon }] — overrides GEOREF when two points are given.
-export const CONTROL_POINTS = [];
+// GPS pins from CDS (Google Maps), matched to spots on the campus map. With two or more points the map is
+// fitted to them by least squares (position, scale, rotation), overriding GEOREF. The campus map is a drawing,
+// so individual buildings can sit ~10–20 m from their true spot; the fit uses all pins to balance that out.
+export const CONTROL_POINTS = [
+  { name: 'Upper School', px: [700, 282], lat: 35.524627, lon: -82.531351 },
+  { name: 'Marberger Field (baseball)', px: [400, 492], lat: 35.523712, lon: -82.532926 },
+  { name: 'Love Hall (Lower School)', px: [790, 650], lat: 35.522810, lon: -82.530662 },
+  { name: 'Nash Athletic Center (rear)', px: [958, 812], lat: 35.522314, lon: -82.530021 },
+];
 
 // Floors confirmed by CDS: buildings 5, 8 and 9 have two floors; all others are single-story. `uses` comes straight from the map legend.
 export const BUILDINGS = [

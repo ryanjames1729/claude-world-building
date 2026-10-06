@@ -29,9 +29,8 @@ When the browser is online, the app also loads **real roads and building footpri
 
 The campus is digitized from the official CDS campus map (`docs/campus-map.jpg`). It includes all 10 buildings with their names and uses, plus the North, South and West lots, campus drives, Marberger Field, Neder Playground, the Woodlands, the Middle School outdoor classrooms, and the bordering streets: Hendersonville Rd, Stuyvesant Rd, Green Rd and Stuyvesant Crescent. Data lives in `src/data/campus.js`.
 
-- **Position and scale are estimates.** The map has no scale bar. To lock it in exactly, add two `CONTROL_POINTS` in `src/data/campus.js`, using real coordinates for two map spots, for example Google Maps pins on Love Hall and the Nash Athletic Center.
+- **Placed by GPS:** four CDS-provided Google Maps pins (Upper School, Marberger Field, Love Hall, Nash Athletic Center) fix the map's position, scale (about 0.49 m per map pixel) and rotation through a least-squares fit. The campus map is a drawing, so individual buildings may sit 10–20 m from their exact spot. The 5-mile radius and terrain are centered on campus.
 - **Floors are confirmed by CDS:** the Upper School (5), Love Hall (8) and the Nash Athletic Center (9) have two floors, and the rest are single-story.
-- **Scale is calibrated** against satellite imagery (`docs/campus-satellite.png`).
 
 ## Campus operations tests
 

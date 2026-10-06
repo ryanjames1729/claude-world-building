@@ -4,15 +4,20 @@ import { llToXZ, xzToLL } from './geo.js';
 
 function makeTransform() {
   if (CONTROL_POINTS.length >= 2) {
-    // similarity transform from two control points
-    const [a, b] = CONTROL_POINTS;
-    const A = llToXZ(a.lat, a.lon), B = llToXZ(b.lat, b.lon);
-    const dpx = [b.px[0] - a.px[0], b.px[1] - a.px[1]], dm = [B.x - A.x, B.z - A.z];
-    const s = Math.hypot(...dm) / Math.hypot(...dpx);
-    const rot = Math.atan2(dm[1], dm[0]) - Math.atan2(dpx[1], dpx[0]);
+    // least-squares similarity transform (position, uniform scale, rotation) through all control points
+    const P = CONTROL_POINTS.map((c) => c.px), Q = CONTROL_POINTS.map((c) => llToXZ(c.lat, c.lon));
+    const n = P.length;
+    const px = P.reduce((s, p) => s + p[0], 0) / n, py = P.reduce((s, p) => s + p[1], 0) / n;
+    const qx = Q.reduce((s, q) => s + q.x, 0) / n, qz = Q.reduce((s, q) => s + q.z, 0) / n;
+    let a = 0, b = 0, d = 0;
+    P.forEach((p, i) => {
+      const x = p[0] - px, y = p[1] - py, u = Q[i].x - qx, v = Q[i].z - qz;
+      a += x * u + y * v; b += x * v - y * u; d += x * x + y * y;
+    });
+    const s = Math.hypot(a, b) / d, rot = Math.atan2(b, a);
     return ([x, y]) => {
-      const u = x - a.px[0], v = y - a.px[1];
-      return { x: A.x + s * (u * Math.cos(rot) - v * Math.sin(rot)), z: A.z + s * (u * Math.sin(rot) + v * Math.cos(rot)) };
+      const u = x - px, v = y - py;
+      return { x: qx + s * (u * Math.cos(rot) - v * Math.sin(rot)), z: qz + s * (u * Math.sin(rot) + v * Math.cos(rot)) };
     };
   }
   const s = GEOREF.metersPerPx, r = GEOREF.rotationDeg * Math.PI / 180;
