@@ -104,3 +104,13 @@ test('UPS battery gives the network core about 30 minutes', () => {
   sim.ops.compute(sim, 0.25); assert.ok(sim.ops.coreUp, 'still up at 15 min');
   sim.ops.compute(sim, 0.3); assert.ok(!sim.ops.coreUp, 'down after ~33 min');
 });
+
+test('PoE desk phones die with the network after the 30-minute battery', () => {
+  const sim = new Simulation(hydro, 9);
+  sim.ops.utilityOn = false;
+  sim.ops.compute(sim, 0.2);
+  assert.ok(sim.ops.phonesPowered, 'phones still on battery at 12 min');
+  sim.ops.compute(sim, 0.4);
+  assert.ok(!sim.ops.phonesPowered, 'phones dead once the network loses power');
+  assert.ok(sim.ops.report(sim).it.lines.some((l) => l.includes('PoE')));
+});

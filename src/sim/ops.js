@@ -92,7 +92,11 @@ export class CampusOps {
     this.circuitsUp = this.circuits.filter((k) => k.up).length;
     this.internetUp = this.coreUp && this.providerUp && this.circuitsUp > 0;
     if (!this.internetUp && sim) this.history.internetDownH += dtH;
-    this.phonesUp = !c.it.voipPhones || (this.internetUp && coreBldg !== 'none');
+    // PoE desk phones draw power from the network switches: no network power → no phones at all
+    const ph = c.it.phones || {};
+    this.phonesPowered = ph.poe ? this.coreUp : coreBldg !== 'none';
+    this.phonesOutside = this.phonesPowered && (!ph.outsideCallsNeedInternet || this.internetUp);
+    this.phonesUp = this.phonesOutside;
     // cell towers: battery backup for some hours, then degrade; fiber backhaul also rides on poles
     const treeHit = sim ? Math.min(1, sim.treesDownFrac * 6) : 0;
     this.cell = this.areaOutageH > 24 || treeHit > 0.6 ? 'mostly down' : this.areaOutageH > 8 || treeHit > 0.25 ? 'degraded' : 'normal';
@@ -132,11 +136,15 @@ export class CampusOps {
         : B[c.it.networkCoreBuilding] === 'none' ? `Network on battery · ${Math.round(this.upsMin)} min left` : 'Network on backup power';
       if (B[c.it.networkCoreBuilding] === 'none') it.lines.push(`Network core on battery: ${Math.round(this.upsMin)} min left`);
     }
-    if (!this.phonesUp) it.lines.push('Desk phones (VoIP) down');
+    if (!this.phonesPowered) it.lines.push('All desk phones dead: PoE phones lose power with the network');
+    else if (!this.phonesOutside) it.lines.push('Desk phones on, but no outside calls (internet down)');
+    else if (B[c.it.networkCoreBuilding] === 'none') it.lines.push(`Desk phones on network battery (PoE): ${Math.round(this.upsMin)} min left`);
     const wifiDark = dark.length;
     if (wifiDark && this.internetUp) it.lines.push(`Wi-Fi out in ${wifiDark} unpowered buildings`);
     if (this.cell !== 'normal') { it.lines.push(`Cell service ${this.cell} (tower batteries / backhaul)`); it.level = Math.max(it.level, this.cell === 'mostly down' ? LEVEL.critical : LEVEL.watch); }
-    if (it.level === LEVEL.ok) it.lines.push(`${nCk} internet circuits up · phones, Wi-Fi and cloud services working`);
+    if (!this.phonesOutside && this.cell === 'mostly down') { it.lines.unshift('⚠ No reliable way to call 911 from campus'); it.level = LEVEL.critical; }
+    else if (!this.phonesOutside) it.lines.push('Emergency calls depend on cell phones');
+    if (it.level === LEVEL.ok) it.lines.push(`${nCk} internet circuits up · PoE desk phones, Wi-Fi and cloud services working`);
     if (c.it.backbone) it.lines.push(`Campus buildings linked by ${c.it.backbone} (protected from trees & ice)`);
 
     const r = sim.roads;

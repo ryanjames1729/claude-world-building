@@ -464,7 +464,9 @@ export class Simulation {
     if (ops) {
       if (ops.power.level === LEVEL.critical) close('Campus buildings without power');
       else if (!this.ops.utilityOn) delay('Campus running on generator power');
-      if (!this.ops.internetUp) { if (this.ops.cell === 'mostly down') close('No internet, phones or reliable cell service on campus'); else delay('Campus internet down'); }
+      if (!this.ops.phonesOutside && this.ops.cell === 'mostly down') close('No way to call 911 from campus: desk phones and cell service down');
+      else if (!this.ops.phonesPowered) close('Campus network and PoE desk phones down');
+      else if (!this.ops.internetUp) delay('Campus internet down');
       const routesClosed = ops.roads.familiesAffected || 0;
       if (routesClosed >= 0.3) close(`Main routes closed for ~${Math.round(routesClosed * 100)}% of families`);
       else if (routesClosed > 0) delay(`Some family routes closed (~${Math.round(routesClosed * 100)}% of families)`);

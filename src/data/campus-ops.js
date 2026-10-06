@@ -25,7 +25,13 @@ export const CAMPUS_OPS = {
       { name: 'Backup internet', route: 'aerial' },
     ],
     providerBatteryHours: 6,    // how long the provider's neighborhood equipment runs on batteries in an area outage
-    voipPhones: true,           // desk phones depend on campus power + network
+    phones: {
+      // Confirmed by CDS: desk phones are powered over the network (PoE). When the network loses power,
+      // every desk phone goes dark with it.
+      poe: true,
+      // ⚠ Assumed: hosted phone service, so outside calls also need the campus internet connection.
+      outsideCallsNeedInternet: true,
+    },
     cloudServices: ['Email & documents', 'Student information system', 'Learning management system'],
   },
   roads: {
