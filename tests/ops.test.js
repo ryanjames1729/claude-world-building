@@ -114,3 +114,14 @@ test('PoE desk phones die with the network after the 30-minute battery', () => {
   assert.ok(!sim.ops.phonesPowered, 'phones dead once the network loses power');
   assert.ok(sim.ops.report(sim).it.lines.some((l) => l.includes('PoE')));
 });
+
+test('two ISPs: losing the primary fails over to the backup', () => {
+  const sim = new Simulation(hydro, 4);
+  sim.ops.circuits.find((k) => k.role === 'primary').up = false;
+  sim.ops.compute(sim, 0.1);
+  assert.ok(sim.ops.internetUp, 'backup carries traffic');
+  assert.equal(sim.ops.report(sim).it.title, 'Failed over to the backup ISP');
+  sim.ops.circuits.forEach((k) => { k.up = false; });
+  sim.ops.compute(sim, 0.1);
+  assert.ok(!sim.ops.internetUp);
+});

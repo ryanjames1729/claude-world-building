@@ -1,6 +1,6 @@
 // Offline support: serve the app shell from cache, refresh it in the background.
 // Bump VERSION when shipping a new build so phones pick it up.
-const VERSION = 'cds-weather-v5';
+const VERSION = 'cds-weather-v6';
 const SHELL = ['./', 'index.html', 'styles.css', 'dist/cds-weather-world.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

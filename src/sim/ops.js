@@ -63,9 +63,10 @@ export class CampusOps {
     // ---- internet circuits: aerial lines fail with falling trees, ice and wind; underground with floods & slides
     for (const ck of this.circuits) {
       if (ck.up) {
-        const hz = ck.route === 'aerial'
-          ? treeDelta * 80 + Math.max(0, iceIn - 0.2) * 0.4 + Math.max(0, gust - 50) * 0.008
-          : Math.max(0, sim.riseM(1) - 2.5) * 0.1 + newSlides * 0.02;
+        // exposure on utility poles (fully for aerial lines, partly upstream for underground entries)
+        const poles = ck.route === 'aerial' ? 1 : (ck.upstreamExposure ?? 0);
+        const hz = poles * (treeDelta * 80 + Math.max(0, iceIn - 0.2) * 0.4 + Math.max(0, gust - 50) * 0.008)
+          + (ck.route === 'aerial' ? 0 : Math.max(0, sim.riseM(1) - 2.5) * 0.1 + newSlides * 0.02);
         if (rng() < 1 - Math.exp(-hz * dtH)) { ck.up = false; ck.downH = 0; }
       } else {
         ck.downH += dtH;
@@ -128,11 +129,12 @@ export class CampusOps {
       it.title = 'Campus internet down';
       if (!this.coreUp) it.lines.push(`Network core has no power: the ${c.it.upsMinutes}-minute battery backup ran out`);
       else if (!this.providerUp) it.lines.push(`Provider equipment out after ${this.areaOutageH.toFixed(0)} h area power outage`);
-      else it.lines.push('All internet circuits cut (lines on poles damaged)');
+      else it.lines.push(`Both providers cut (primary and backup lines damaged off campus)`);
       it.lines.push(`Cloud services (${c.it.cloudServices.join(', ').toLowerCase()}) unreachable from campus`);
     } else if (this.circuitsUp < nCk || this.upsMin < c.it.upsMinutes || B[c.it.networkCoreBuilding] !== 'utility') {
       it.level = LEVEL.watch;
-      it.title = this.circuitsUp < nCk ? `Running on ${this.circuitsUp} of ${nCk} internet circuits`
+      const primaryDown = this.circuits.some((k) => k.role === 'primary' && !k.up);
+      it.title = this.circuitsUp < nCk ? (primaryDown ? 'Failed over to the backup ISP' : 'Backup ISP down — no redundancy')
         : B[c.it.networkCoreBuilding] === 'none' ? `Network on battery · ${Math.round(this.upsMin)} min left` : 'Network on backup power';
       if (B[c.it.networkCoreBuilding] === 'none') it.lines.push(`Network core on battery: ${Math.round(this.upsMin)} min left`);
     }
@@ -144,7 +146,8 @@ export class CampusOps {
     if (this.cell !== 'normal') { it.lines.push(`Cell service ${this.cell} (tower batteries / backhaul)`); it.level = Math.max(it.level, this.cell === 'mostly down' ? LEVEL.critical : LEVEL.watch); }
     if (!this.phonesOutside && this.cell === 'mostly down') { it.lines.unshift('⚠ No reliable way to call 911 from campus'); it.level = LEVEL.critical; }
     else if (!this.phonesOutside) it.lines.push('Emergency calls depend on cell phones');
-    if (it.level === LEVEL.ok) it.lines.push(`${nCk} internet circuits up · PoE desk phones, Wi-Fi and cloud services working`);
+    if (it.level === LEVEL.ok) it.lines.push(`Primary and backup ISPs up${c.it.entry ? ` (${c.it.entry})` : ''} · PoE desk phones, Wi-Fi and cloud services working`);
+    else if (this.internetUp && this.circuitsUp < nCk) it.lines.push(`${this.circuits.filter((k) => !k.up).map((k) => k.name).join(', ')} down ${Math.round(Math.max(...this.circuits.filter((k) => !k.up).map((k) => k.downH)))} h; ${this.circuits.filter((k) => k.up).map((k) => k.name).join(', ')} carrying traffic`);
     if (c.it.backbone) it.lines.push(`Campus buildings linked by ${c.it.backbone} (protected from trees & ice)`);
 
     const r = sim.roads;

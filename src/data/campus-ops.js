@@ -18,12 +18,15 @@ export const CAMPUS_OPS = {
     // exposed to falling trees or ice — it fails only when buildings lose power (after the UPS runs out).
     backbone: 'underground fiber',
     upsMinutes: 30,             // battery backup for the network core (confirmed by CDS: ~30 minutes)
-    // Internet circuits from the provider into campus. route: 'aerial' (on utility poles) or 'underground'.
-    // ⚠ Still an assumption: how many circuits, and whether the provider's line reaches campus on poles.
+    // Confirmed by CDS: two separate internet providers — a primary and a backup — both enter campus through an
+    // underground fiber vault. Separate providers fail independently, so the backup usually survives a primary cut.
+    // ⚠ Assumed: off campus, each provider's line shares some exposure to poles/trees along area roads
+    // (upstreamExposure: 0 = fully underground to the provider, 1 = all on poles).
     circuits: [
-      { name: 'Primary internet (fiber)', route: 'aerial' },
-      { name: 'Backup internet', route: 'aerial' },
+      { name: 'Primary ISP', role: 'primary', route: 'underground', upstreamExposure: 0.35 },
+      { name: 'Backup ISP', role: 'backup', route: 'underground', upstreamExposure: 0.35 },
     ],
+    entry: 'underground fiber vault',
     providerBatteryHours: 6,    // how long the provider's neighborhood equipment runs on batteries in an area outage
     phones: {
       // Confirmed by CDS: desk phones are powered over the network (PoE). When the network loses power,
