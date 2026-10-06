@@ -17,7 +17,7 @@ You can run Asheville's normal day-to-day climate, take manual control of the we
 
 CDS Weather World is a web app. It runs in any modern browser (Chrome, Edge, Safari, Firefox) on a computer, phone or tablet. There's nothing to install.
 
-- **Public URL (recommended):** once this repo is on `main`, the included GitHub Actions workflow builds, tests and publishes it to GitHub Pages at `https://<user>.github.io/claude-video-testing/`. One-time setup: **Settings → Pages → Source: GitHub Actions**. Share that link with students.
+- **Public URL (recommended):** once this repo is on `main`, the included GitHub Actions workflow builds, tests and publishes it to GitHub Pages at `https://ryanjames1729.github.io/claude-world-building/`. One-time setup: **Settings → Pages → Source: GitHub Actions**. Share that link with students.
 - **Install it like an app:** on a phone, open the link, then choose *Share → Add to Home Screen* (iPhone/iPad) or *Install app* (Android/Chrome). It opens full screen with its own icon. After the first visit it also works **offline**, except for the optional OpenStreetMap layer.
 - **Locally:** run `npm run dev` and open http://localhost:8000. You can also open `index.html` directly, but offline mode needs it served over http(s).
 
