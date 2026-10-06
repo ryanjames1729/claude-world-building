@@ -148,7 +148,8 @@ export function createCampus(labels) {
   // trees stay off lawns, lots and buildings; the Woodlands get a dense stand
   const blockers = SURFACES.filter((s) => s.kind !== 'woods' && s.poly).map((s) => polyXZ(s.poly));
   const pads = BUILDINGS.flatMap((b) => (b.parts || [b.poly]).map(polyXZ));
-  const circles = SURFACES.filter((s) => s.circle).map((s) => ({ c: pxToXZ([s.circle[0], s.circle[1]]), r: s.circle[2] * 0.55 + 10 }));
+  const mpp = Math.hypot(pxToXZ([1, 0]).x - pxToXZ([0, 0]).x, pxToXZ([1, 0]).z - pxToXZ([0, 0]).z);
+  const circles = SURFACES.filter((s) => s.circle).map((s) => ({ c: pxToXZ([s.circle[0], s.circle[1]]), r: s.circle[2] * mpp + 10 }));
   const avoid = (x, z) => blockers.some((P) => pointInPoly(x, z, P)) || pads.some((P) => pointInPoly(x, z, P)
     || P.some((p) => Math.hypot(p.x - x, p.z - z) < 10)) || circles.some((o) => Math.hypot(o.c.x - x, o.c.z - z) < o.r);
   const woods = SURFACES.filter((s) => s.kind === 'woods').map((s) => polyXZ(s.poly));

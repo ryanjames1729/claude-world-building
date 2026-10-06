@@ -5,7 +5,10 @@
 // front door of Love Hall and the Nash Athletic Center). Until then the map's scale and position are estimates.
 export const GEOREF = {
   anchorPx: [700, 560],      // this map pixel sits at the simulation center (CENTER in geo-constants.js)
-  metersPerPx: 0.55,         // estimated: Love Hall's main bar ≈ 75 m long
+  // Scale measured against satellite imagery (docs/campus-satellite.png): home plate to the back of the infield
+  // dirt on Marberger Field (~47 m on a regulation diamond) and South Lot parking modules (~18 m) both give
+  // ~0.31 m per satellite pixel, and the campus map is drawn ~1.18× smaller than that view → ~0.37 m per map pixel.
+  metersPerPx: 0.37,
   rotationDeg: 0,            // the map's north arrow points straight up
 };
 // Optional: [{ px: [x, y], lat, lon }, { px: [x, y], lat, lon }] — overrides GEOREF when two points are given.
