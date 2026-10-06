@@ -109,25 +109,27 @@ export class CampusOps {
       power.level = dark.length ? LEVEL.critical : LEVEL.watch;
       power.title = gen.length ? `Campus on generator power · ${this.utilityOffH.toFixed(0)} h` : `Campus without power · ${this.utilityOffH.toFixed(0)} h`;
       for (const g of c.power.generators) power.lines.push(`${name(g.building)}: generator, ${this.fuel[g.building].toFixed(0)} h fuel left`);
+      if (!c.power.generators.length) power.lines.push('No backup generators on campus');
       if (dark.length) power.lines.push(`${dark.length} of ${ids.length} buildings dark (no heat, lights, water pumps)`);
     } else if (sim.powerOut > 0.15) {
       power.level = LEVEL.watch;
       power.lines.push(`${Math.round(sim.powerOut * 100)}% of the area is without power; campus feed at risk`);
     }
-    if (power.level === LEVEL.ok) power.lines.push('All buildings powered');
+    if (power.level === LEVEL.ok) power.lines.push(`All buildings powered${c.power.generators.length ? '' : ' · no generator backup'}`);
 
     const it = { level: LEVEL.ok, title: 'Network & internet normal', lines: [] };
     const nCk = this.circuits.length;
     if (!this.internetUp) {
       it.level = LEVEL.critical;
       it.title = 'Campus internet down';
-      if (!this.coreUp) it.lines.push('Network core has no power (battery backup exhausted)');
+      if (!this.coreUp) it.lines.push(`Network core has no power: the ${c.it.upsMinutes}-minute battery backup ran out`);
       else if (!this.providerUp) it.lines.push(`Provider equipment out after ${this.areaOutageH.toFixed(0)} h area power outage`);
       else it.lines.push('All internet circuits cut (lines on poles damaged)');
       it.lines.push(`Cloud services (${c.it.cloudServices.join(', ').toLowerCase()}) unreachable from campus`);
-    } else if (this.circuitsUp < nCk || this.upsMin < c.it.upsMinutes || B[c.it.networkCoreBuilding] === 'generator') {
+    } else if (this.circuitsUp < nCk || this.upsMin < c.it.upsMinutes || B[c.it.networkCoreBuilding] !== 'utility') {
       it.level = LEVEL.watch;
-      it.title = this.circuitsUp < nCk ? `Running on ${this.circuitsUp} of ${nCk} internet circuits` : 'Network on backup power';
+      it.title = this.circuitsUp < nCk ? `Running on ${this.circuitsUp} of ${nCk} internet circuits`
+        : B[c.it.networkCoreBuilding] === 'none' ? `Network on battery · ${Math.round(this.upsMin)} min left` : 'Network on backup power';
       if (B[c.it.networkCoreBuilding] === 'none') it.lines.push(`Network core on battery: ${Math.round(this.upsMin)} min left`);
     }
     if (!this.phonesUp) it.lines.push('Desk phones (VoIP) down');
@@ -135,6 +137,7 @@ export class CampusOps {
     if (wifiDark && this.internetUp) it.lines.push(`Wi-Fi out in ${wifiDark} unpowered buildings`);
     if (this.cell !== 'normal') { it.lines.push(`Cell service ${this.cell} (tower batteries / backhaul)`); it.level = Math.max(it.level, this.cell === 'mostly down' ? LEVEL.critical : LEVEL.watch); }
     if (it.level === LEVEL.ok) it.lines.push(`${nCk} internet circuits up · phones, Wi-Fi and cloud services working`);
+    if (c.it.backbone) it.lines.push(`Campus buildings linked by ${c.it.backbone} (protected from trees & ice)`);
 
     const r = sim.roads;
     const roads = { level: LEVEL.ok, title: 'Roads clear', lines: [] };

@@ -7,16 +7,19 @@ export const CAMPUS_OPS = {
     // How exposed the campus utility feed is compared with the average Asheville customer (1 = average).
     feedExposure: 1.0,
     // Backup generators: building id (see campus.js) and hours of fuel on site.
-    generators: [
-      { building: 8, hours: 24, covers: 'Love Hall network core and offices (assumed)' },
-    ],
+    // Confirmed by CDS: the campus has no generators.
+    generators: [],
     // Can fuel be delivered when roads are passable?
     refuelWhenRoadsOpen: true,
   },
   it: {
     networkCoreBuilding: 8,     // building that holds the main network equipment (assumed)
+    // Confirmed by CDS: all buildings are linked by underground fiber, so the campus network itself is not
+    // exposed to falling trees or ice — it fails only when buildings lose power (after the UPS runs out).
+    backbone: 'underground fiber',
     upsMinutes: 30,             // battery backup for the network core (confirmed by CDS: ~30 minutes)
-    // Internet circuits into campus. route: 'aerial' (on utility poles) or 'underground'.
+    // Internet circuits from the provider into campus. route: 'aerial' (on utility poles) or 'underground'.
+    // ⚠ Still an assumption: how many circuits, and whether the provider's line reaches campus on poles.
     circuits: [
       { name: 'Primary internet (fiber)', route: 'aerial' },
       { name: 'Backup internet', route: 'aerial' },
