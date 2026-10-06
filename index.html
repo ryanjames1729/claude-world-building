@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0e141c" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CDS Weather" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <title>CDS Weather World</title>
+  <meta name="description" content="A 3D weather and hazards simulation of Carolina Day School and a 5-mile radius around it in Asheville, NC." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="scene"></canvas>
+    <div id="loading"><div class="spinner"></div><div id="loading-text">Building the French Broad valley…</div></div>
+
+    <header id="topbar">
+      <div class="brand"><span class="logo">CDS</span><div><div class="title">Weather World</div><div class="sub">Carolina Day School · 5-mile radius · Asheville, NC</div></div></div>
+      <div class="clock">
+        <button id="btn-play" class="icon-btn" title="Play / pause (space)">⏸</button>
+        <div><div id="clock-text">—</div><div id="clock-sub" class="muted">—</div></div>
+        <select id="speed" title="Simulation speed">
+          <option value="0.000277778">Real time</option>
+          <option value="0.0166667">1 min / sec</option>
+          <option value="0.166667" selected>10 min / sec</option>
+          <option value="1">1 hr / sec</option>
+          <option value="3">3 hr / sec</option>
+          <option value="6">6 hr / sec</option>
+        </select>
+        <input id="jump" type="datetime-local" title="Jump to date & time" />
+      </div>
+      <div class="top-actions">
+        <button id="toggle-left" class="pill">☰ Controls</button>
+        <button id="toggle-right" class="pill">📊 Conditions</button>
+      </div>
+    </header>
+
+    <aside id="left" class="panel">
+      <button class="panel-close" aria-label="Close controls">✕</button>
+      <section>
+        <h3>Weather mode</h3>
+        <div class="seg" id="mode-seg">
+          <button data-mode="auto" class="on">Live climate</button>
+          <button data-mode="manual">Manual</button>
+          <button data-mode="scenario">Scenarios</button>
+        </div>
+        <p class="hint" id="mode-hint">Weather is generated from Asheville's real climate normals for the date: fronts, showers, summer storms, valley fog and the occasional winter storm.</p>
+      </section>
+
+      <section id="scenario-box" hidden>
+        <h3>Historic-inspired events</h3>
+        <div id="scenario-list"></div>
+      </section>
+
+      <section id="manual-box" hidden>
+        <h3>Manual weather</h3>
+        <div class="presets">
+          <button data-preset="clear">☀️ Clear & calm</button>
+          <button data-preset="downpour">🌧 Downpour</button>
+          <button data-preset="snow">❄️ Heavy snow</button>
+          <button data-preset="ice">🧊 Freezing rain</button>
+          <button data-preset="hurricane">🌀 Tropical storm</button>
+          <button data-preset="fog">🌫 Valley fog</button>
+        </div>
+        <label class="slider">Temperature <span id="v-tempF"></span><input id="m-tempF" type="range" min="-5" max="100" step="1" /></label>
+        <label class="slider">Warm layer aloft <span id="v-noseF"></span><input id="m-noseF" type="range" min="10" max="60" step="1" /></label>
+        <label class="check"><input id="m-noseAuto" type="checkbox" /> Aloft temp follows surface (uncheck to create freezing rain / sleet)</label>
+        <label class="slider">Precipitation <span id="v-rain"></span><input id="m-rain" type="range" min="0" max="3" step="0.01" /></label>
+        <label class="slider">Sustained wind <span id="v-wind"></span><input id="m-wind" type="range" min="0" max="70" step="1" /></label>
+        <label class="slider">Gusts <span id="v-gust"></span><input id="m-gust" type="range" min="0" max="110" step="1" /></label>
+        <label class="slider">Cloud cover <span id="v-cloud"></span><input id="m-cloud" type="range" min="0" max="1" step="0.01" /></label>
+        <label class="slider">Valley fog <span id="v-fog"></span><input id="m-fog" type="range" min="0" max="1" step="0.01" /></label>
+        <label class="slider">Lightning <span id="v-thunder"></span><input id="m-thunder" type="range" min="0" max="1" step="0.01" /></label>
+      </section>
+
+      <section>
+        <h3>Camera</h3>
+        <div class="presets" id="cam-presets"></div>
+        <p class="hint" id="cam-hint">Drag to orbit · right-drag to pan · scroll to zoom</p>
+      </section>
+
+      <section>
+        <h3>Layers</h3>
+        <div class="toggles">
+          <label class="check"><input type="checkbox" id="t-labels" checked /> Labels</label>
+          <label class="check"><input type="checkbox" id="t-ring" checked /> 5-mile ring</label>
+          <label class="check"><input type="checkbox" id="t-roads" checked /> Roads</label>
+          <label class="check"><input type="checkbox" id="t-roadstatus" /> Hazard view</label>
+          <label class="check"><input type="checkbox" id="t-trees" checked /> Trees</label>
+          <label class="check"><input type="checkbox" id="t-clouds" checked /> Clouds</label>
+          <label class="check"><input type="checkbox" id="t-precip" checked /> Rain / snow</label>
+          <label class="check"><input type="checkbox" id="t-cars" checked /> Traffic</label>
+        </div>
+        <div id="road-legend" class="legend" hidden>
+          <span><i style="background:#33cc59"></i>Clear</span><span><i style="background:#f2f2ff"></i>Snow</span><span><i style="background:#4de6ff"></i>Ice</span><span><i style="background:#2659ff"></i>Flooded</span><span><i style="background:#ff261a"></i>Blocked</span><span><i style="background:#ff9a1a"></i>Signal dark</span><span class="legend-note">Buildings: green = utility power, amber = generator, red = no power</span>
+        </div>
+        <div class="row">
+          <button id="btn-reset" class="pill">↺ Reset impacts</button>
+          <button id="btn-now" class="pill">⏱ Jump to now</button>
+        </div>
+        <p class="hint" id="osm-status">Roads: approximate major corridors.</p>
+        <button id="btn-save-osm" class="pill" hidden>⬇ Save map data</button>
+      </section>
+      <section class="about">
+        <details>
+          <summary>About this model</summary>
+          <p>Terrain is real elevation data (USGS 3DEP / SRTM via AWS Terrain Tiles), shown with 1.5× vertical exaggeration. Rivers and creeks are traced from that terrain, and flooding uses the
+          <b>Height Above Nearest Drainage</b> method that hydrologists use for rapid flood mapping. Temperatures cool about 3.5 °F per 1,000 ft of elevation, so ridges can get snow while the valley gets rain.
+          Ridges also get extra rain or snow as air is forced up over them, and calm, clear nights trap cold air in the valleys.
+          Rivers are modeled as linear reservoirs: creeks respond in minutes, the French Broad over a day.</p>
+          <p>Scenarios are reconstructions for teaching, not official records. The campus buildings are schematic unless OpenStreetMap data loads. Road data © OpenStreetMap contributors.</p>
+        </details>
+      </section>
+    </aside>
+
+    <aside id="right" class="panel">
+      <button class="panel-close" aria-label="Close conditions">✕</button>
+      <section class="now">
+        <div class="now-main">
+          <div id="now-temp" class="big">—</div>
+          <div>
+            <div id="now-type" class="ptype">—</div>
+            <div id="now-label" class="muted">—</div>
+          </div>
+        </div>
+        <div class="grid2" id="now-grid"></div>
+      </section>
+      <section id="alerts-box">
+        <h3>Alerts <span class="muted small">(simulated)</span></h3>
+        <div id="alerts"></div>
+      </section>
+      <section>
+        <h3>Carolina Day School status</h3>
+        <div id="school"></div>
+      </section>
+      <section>
+        <h3>Regional check · 30-mile radius</h3>
+        <p class="hint" style="margin:0 0 8px">Simulated interstate & highway weather cams used for the 8 PM and 5:30 AM calls.</p>
+        <div id="cams" class="cams"></div>
+      </section>
+      <section>
+        <h3>Campus operations</h3>
+        <div id="ops"></div>
+        <details class="bldgs"><summary>Buildings</summary><div id="ops-bldgs"></div></details>
+        <p class="hint" id="ops-assumed">Confirmed by CDS: no generators, underground fiber between buildings, 30-minute network battery, PoE desk phones, primary + backup ISPs via an underground fiber vault. Still assumed: how exposed each provider's line is off campus, hosted phone service, and family route shares (src/data/campus-ops.js).</p>
+      </section>
+      <section>
+        <h3>Accumulations</h3>
+        <div class="grid2" id="accum"></div>
+        <div class="bar-label">Soil saturation <span id="soil-v"></span></div>
+        <div class="bar"><div id="soil-bar"></div></div>
+      </section>
+      <section>
+        <h3>Rivers & creeks</h3>
+        <div id="rivers"></div>
+      </section>
+      <section>
+        <h3>Impacts within 5 miles</h3>
+        <div class="grid2" id="impacts"></div>
+        <div id="closures" class="muted small"></div>
+      </section>
+    </aside>
+
+    <div id="narrative" hidden></div>
+    <div id="chart-wrap"><canvas id="chart"></canvas></div>
+    <div id="toasts"></div>
+  </div>
+  <script src="dist/cds-weather-world.js"></script>
+</body>
+</html>
