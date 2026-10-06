@@ -1,0 +1,21 @@
+{
+  "name": "cds-weather-world",
+  "version": "1.0.0",
+  "description": "3D weather & hazards simulation of Carolina Day School and a 5-mile radius around it (Asheville, NC).",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/main.js --bundle --minify --format=iife --target=es2020 --outfile=dist/cds-weather-world.js",
+    "dev": "esbuild src/main.js --bundle --format=iife --target=es2020 --outfile=dist/cds-weather-world.js --sourcemap --servedir=. --watch",
+    "terrain": "node scripts/build-terrain.mjs",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "playwright": "^1.63.0",
+    "pngjs": "^7.0.0"
+  }
+}
