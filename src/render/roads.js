@@ -128,7 +128,7 @@ export function buildRoads(ways, hydro, cover) {
       const far = hydro.hand[k] > 100;
       for (const side of [-1, 1]) {
         const sx = p.x + nx * side * K.w / 2, sz = p.z + nz * side * K.w / 2;
-        const y = Math.max(elevToY(elevationAt(sx, sz)), elevToY(e)) + 2.5 + K.w * 0.05;
+        const y = Math.max(elevToY(elevationAt(sx, sz), sx, sz), elevToY(e, p.x, p.z)) + 2.5 + K.w * 0.05;
         pos.push(sx, y, sz);
         attrs.aElev.push(e); attrs.aHand.push(far ? 999 : hydro.hand[k]); attrs.aDrainElev.push(far ? -999 : hydro.drainElev[k]);
         attrs.aClass.push(far ? 0 : hydro.drainClass[k]); attrs.aMajor.push(K.major); attrs.aHazard.push(0); attrs.aAcross.push(side * 0.5);

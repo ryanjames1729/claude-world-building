@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { U, GLSL_COMMON } from './common.js';
+import { U, GLSL_COMMON, VEX_GLSL } from './common.js';
 import { elevToY, HALF_EXTENT_M } from '../geo.js';
 
 export function createSky() {
@@ -105,7 +105,10 @@ export function createFogSheet() {
   const mat = new THREE.ShaderMaterial({
     uniforms: { ...U },
     transparent: true, depthWrite: false,
-    vertexShader: `varying vec3 vPos; void main(){ vPos = (modelMatrix * vec4(position,1.)).xyz; gl_Position = projectionMatrix * viewMatrix * vec4(vPos,1.); }`,
+    vertexShader: /* glsl */`${VEX_GLSL}
+      uniform float uValleyFogTop; varying vec3 vPos;
+      void main(){ vec3 p = position; p.y = (uValleyFogTop - uBaseElev) * vexAt(p.xz);
+        vPos = (modelMatrix * vec4(p, 1.)).xyz; gl_Position = projectionMatrix * viewMatrix * vec4(vPos, 1.); }`,
     fragmentShader: /* glsl */`
       ${GLSL_COMMON}
       varying vec3 vPos;
@@ -117,7 +120,7 @@ export function createFogSheet() {
         gl_FragColor = vec4(col, a);
       }`,
   });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(HALF_EXTENT_M * 2, HALF_EXTENT_M * 2).rotateX(-Math.PI / 2), mat);
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(HALF_EXTENT_M * 2, HALF_EXTENT_M * 2, 64, 64).rotateX(-Math.PI / 2), mat);
   mesh.renderOrder = 4;
   return mesh;
 }

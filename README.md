@@ -59,7 +59,7 @@ Animated cars follow the road network. Traffic follows weekday rush hours and we
 
 ## What's modeled
 
-- **Terrain:** real elevation (USGS 3DEP/SRTM via AWS Terrain Tiles, ~34 m grid), with 1.5× vertical exaggeration.
+- **Terrain:** real elevation (USGS 3DEP/SRTM via AWS Terrain Tiles, ~34 m grid; spot-checked against ~5 m tiles across campus, which agree within about a meter). Heights are true scale around campus and blend to 1.5× exaggeration beyond about 2 miles, so the gentle campus grades look right while the ridges still read on the 5-mile map. Small creeks under the graded campus are treated as culverts.
 - **Rivers and flooding:** creeks and rivers are traced from the terrain (priority-flood fill, D8 flow routing and flow accumulation, plus upstream inflow for rivers that enter the map). Flood extent uses **HAND (Height Above Nearest Drainage)**, the method used for rapid flood-inundation mapping. Runoff depends on soil saturation and feeds linear-reservoir models: creeks respond in under an hour, the French Broad over about a day. Mud is left behind where floodwater receded.
 - **Elevation-aware weather:** temperature falls ~3.5 °F per 1,000 ft, ridges get extra rain and snow (orographic lift), and calm, clear nights form cold-air pools in the valleys. Snow depth and ice accretion are tracked in eight elevation bands, so the ridges can be white while campus is wet.
 - **Precipitation type:** decided from the surface temperature and a warm layer aloft. That gives rain, snow, sleet, or freezing rain (the cold-air-damming setup).

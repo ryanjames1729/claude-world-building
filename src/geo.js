@@ -8,11 +8,19 @@ export const M_PER_DEG_LON = 111320 * Math.cos(CENTER.lat * Math.PI / 180);
 export const N = TERRAIN_SIZE;                 // vertices per side
 export const CELL = (2 * HALF_EXTENT_M) / (N - 1);
 export const BASE_ELEV = 580;                   // elevation mapped to y = 0
-export const VEX = 1.5;                         // vertical exaggeration so the ridges read well
+// Vertical exaggeration: true scale (1×) around campus so its gentle grades look right, blending to 1.5× in the
+// surrounding mountains so the ridges and valleys read clearly on the 5-mile map.
+export const VEX = 1.5;
+export const VEX_NEAR = 1.0, VEX_R0 = 1200, VEX_R1 = 3500;
+export function vexAt(x, z) {
+  const t = Math.max(0, Math.min(1, (Math.hypot(x, z) - VEX_R0) / (VEX_R1 - VEX_R0)));
+  return VEX_NEAR + (VEX - VEX_NEAR) * t * t * (3 - 2 * t);
+}
 
 export const llToXZ = (lat, lon) => ({ x: (lon - CENTER.lon) * M_PER_DEG_LON, z: -(lat - CENTER.lat) * M_PER_DEG_LAT });
 export const xzToLL = (x, z) => ({ lat: CENTER.lat - z / M_PER_DEG_LAT, lon: CENTER.lon + x / M_PER_DEG_LON });
-export const elevToY = (e) => (e - BASE_ELEV) * VEX;
+/** World y for an elevation; pass x, z for the local exaggeration (omitted = mountain scale, e.g. cloud decks). */
+export const elevToY = (e, x = 1e9, z = 0) => (e - BASE_ELEV) * vexAt(x, z);
 
 function decode(b64) {
   if (typeof atob === 'function') {
@@ -52,7 +60,7 @@ export function elevationAt(x, z) {
   const k = j * N + i;
   return (elev[k] * (1 - a) + elev[k + 1] * a) * (1 - b) + (elev[k + N] * (1 - a) + elev[k + N + 1] * a) * b;
 }
-export const groundY = (x, z) => elevToY(elevationAt(x, z));
+export const groundY = (x, z) => elevToY(elevationAt(x, z), x, z);
 
 /** Slope in degrees (true, unexaggerated) at a cell. */
 export function slopeDeg(k) {

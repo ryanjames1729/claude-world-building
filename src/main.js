@@ -243,7 +243,6 @@ async function main() {
     U.uFogDensity.value = 0.45 / Math.max(vis, 300) + 6e-6;
     U.uValleyFog.value = w.fog;
     U.uValleyFogTop.value = 640 + w.fog * 110;
-    fogSheet.position.y = elevToY(U.uValleyFogTop.value);
     fogSheet.visible = w.fog > 0.05;
     for (let b = 0; b < BANDS; b++) { U.uSnow.value[b] = sim.snowCm[b]; U.uIce.value[b] = sim.iceMm[b]; }
     wet += ((w.precip > 0.1 || sim.campus.snowCm > 0 && sim.campus.tempC > 0 ? 1 : 0) - wet) * Math.min(1, simDtH / (w.precip > 0.1 ? 0.5 : 6));

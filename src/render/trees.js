@@ -132,7 +132,7 @@ export function createForest(landcover, campusAvoid, density = 1, extra = []) {
       q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * Math.PI * 2);
       const s = r.scale * 1.25;
       sc.set(s, s, s);
-      m.compose(new THREE.Vector3(r.x, elevToY(r.e) - 0.5, r.z), q, sc);
+      m.compose(new THREE.Vector3(r.x, elevToY(r.e, r.x, r.z) - 0.5, r.z), q, sc);
       mesh.setMatrixAt(i, m);
       seed[i] = rnd(); el[i] = r.e; fallDir[i] = rnd() * Math.PI * 2;
       r.mesh = kind; r.i = i;
