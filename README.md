@@ -31,7 +31,7 @@ Real roads, traffic signals and neighborhood buildings come from a built-in Open
 - **30-mile region (outer):** about 200 m terrain out past 30 miles, reaching Mt. Mitchell (6,684 ft), the Craggies, Mt. Pisgah and Cold Mountain. It includes the full river network traced from that terrain (the French Broad from Hendersonville, the Swannanoa through Black Mountain, the Pigeon at Canton, Ivy Creek and the Mills River), towns from Marshall to Brevard and from Canton to Old Fort, and the main highways. The nine weather cams appear on the map as colored beacons with live road conditions.
 - **Snow and ice zones** now cover 16 elevation bands up to Mt. Mitchell. In the Blizzard of '93, for example, Mt. Mitchell gets about 4 feet while campus gets about 20 inches.
 - **The 🏔 30-mile region camera** shows the whole area. The core's edge blends into the regional terrain so the two levels meet without a step.
-- **Regional highways** use approximate alignments until real data is baked in. On a hosted copy, click **⬇ Save 30-mile highway data** under *Regional check*, then run `node scripts/bake-osm.mjs --region data/osm-region-snapshot.json`.
+- **Regional highways** come from a baked OpenStreetMap snapshot (Oct 7, 2026): 3,268 segments of interstates, US and NC routes and the Blue Ridge Parkway. Their shapes are simplified to about 15 m. To refresh it, click **⬇ Save 30-mile highway data** under *Regional check* in a build without the snapshot, then run `node scripts/bake-osm.mjs --region data/osm-region-snapshot.json`.
 
 ## The campus
 

@@ -37,3 +37,15 @@ test('Blizzard of 93 buries Mt. Mitchell far deeper than campus', () => {
   const mitchell = bandAt(sim.snowCm, 2037) / 2.54, campus = sim.campus.snowCm / 2.54;
   assert.ok(mitchell > campus * 1.6, `Mitchell ${mitchell.toFixed(0)}" vs campus ${campus.toFixed(0)}"`);
 });
+
+test('baked regional highways reach every weather cam and get evaluated', async () => {
+  const { bakedRegionOSM } = await import('../src/render/osm.js');
+  const ways = bakedRegionOSM();
+  assert.ok(ways && ways.length > 2000, 'regional OSM highways baked in');
+  const pts = ways.flatMap((w) => w.pts.map(([la, lo]) => llToXZ(la, lo)));
+  for (const s of SITES) {
+    const p = llToXZ(s.lat, s.lon);
+    const d = Math.min(...pts.map((q) => Math.hypot(q.x - p.x, q.z - p.z)));
+    assert.ok(d < 1500, `${s.name}: nearest highway ${d.toFixed(0)} m`);
+  }
+});
