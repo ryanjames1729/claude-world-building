@@ -1,6 +1,6 @@
 # CDS Weather World
 
-A 3D, real-terrain weather and natural-hazards simulation of **Carolina Day School** (Asheville, NC) and everything within a **5-mile radius** of campus. It covers the French Broad and Swannanoa river valleys, Biltmore Village, the Biltmore Estate, downtown Asheville and the Blue Ridge to the east.
+A 3D, real-terrain weather and natural-hazards simulation of **Carolina Day School** (Asheville, NC). It works at two levels: a detailed **5-mile core** around campus and a **30-mile region** around it. It covers the French Broad and Swannanoa river valleys, Biltmore Village, the Biltmore Estate, downtown Asheville and the Blue Ridge to the east.
 
 You can run Asheville's normal day-to-day climate, take manual control of the weather, or replay historic-inspired events:
 
@@ -24,6 +24,14 @@ CDS Weather World is a web app. It runs in any modern browser (Chrome, Edge, Saf
 Phones and tablets automatically get a lighter scene, with fewer trees and particles and a lower render resolution, so it stays smooth. On a computer: drag to orbit, right-drag to pan, scroll to zoom, and press **space** to play or pause. On touch screens: one finger orbits, two fingers zoom and pan. The **Controls** and **Conditions** buttons open panels from the bottom of the screen. The camera buttons jump to the campus, the 5-mile overview, Biltmore Village, the French Broad, downtown or a ridge-top view.
 
 Real roads, traffic signals and neighborhood buildings come from a built-in OpenStreetMap snapshot, so the app works offline.
+
+## Two levels: the 5-mile core and the 30-mile region
+
+- **5-mile core (detailed):** about 34 m terrain, every street, building, traffic signal and car, the campus, street-level flooding and campus operations.
+- **30-mile region (outer):** about 200 m terrain out past 30 miles, reaching Mt. Mitchell (6,684 ft), the Craggies, Mt. Pisgah and Cold Mountain. It includes the full river network traced from that terrain (the French Broad from Hendersonville, the Swannanoa through Black Mountain, the Pigeon at Canton, Ivy Creek and the Mills River), towns from Marshall to Brevard and from Canton to Old Fort, and the main highways. The nine weather cams appear on the map as colored beacons with live road conditions.
+- **Snow and ice zones** now cover 16 elevation bands up to Mt. Mitchell. In the Blizzard of '93, for example, Mt. Mitchell gets about 4 feet while campus gets about 20 inches.
+- **The 🏔 30-mile region camera** shows the whole area. The core's edge blends into the regional terrain so the two levels meet without a step.
+- **Regional highways** use approximate alignments until real data is baked in. On a hosted copy, click **⬇ Save 30-mile highway data** under *Regional check*, then run `node scripts/bake-osm.mjs --region data/osm-region-snapshot.json`.
 
 ## The campus
 
@@ -77,7 +85,7 @@ npm install
 npm run dev        # rebuild on change + local server at http://localhost:8000
 npm run build      # production bundle -> dist/cds-weather-world.js
 npm test           # simulation/calibration tests (Node)
-npm run terrain    # re-download elevation data (e.g. after moving the center point)
+npm run terrain    # re-download elevation data for both levels (node scripts/build-terrain.mjs inner|region)
 ```
 
 Code map:

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { U, GLSL_COMMON, VEX_GLSL } from './common.js';
 import { elevToY, HALF_EXTENT_M } from '../geo.js';
+import { REGION_HALF_M } from '../geo-region.js';
 
 export function createSky() {
   const uniforms = { ...U, uCloud: { value: 0.3 }, uStorm: { value: 0 }, uSunElev: { value: 0.5 } };
@@ -33,7 +34,7 @@ export function createSky() {
         gl_FragColor = vec4(col, 1.);
       }`,
   });
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(60000, 32, 16), mat);
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(450000, 32, 16), mat);
   sky.frustumCulled = false;
   sky.renderOrder = -10;
   return { mesh: sky, uniforms };
@@ -54,12 +55,13 @@ function cloudMaterial(layer) {
         float thresh = 1. - uCover;
         float a = smoothstep(thresh - .08, thresh + .22, n + uCover * .25);
         a *= uCover > .02 ? 1. : 0.;
-        float edge = smoothstep(${(HALF_EXTENT_M * 2.6).toFixed(1)}, ${(HALF_EXTENT_M * 1.2).toFixed(1)}, length(vPos.xz));
+        float edge = smoothstep(${(REGION_HALF_M * 2.2).toFixed(1)}, ${(REGION_HALF_M * 1.2).toFixed(1)}, length(vPos.xz));
         // fade when the camera flies close to the layer
         float camNear = smoothstep(60., 600., abs(cameraPosition.y - vPos.y));
         a *= edge * mix(.35, 1., camNear);
         // looking down from above the deck: thin it out so the ground stays visible
         a *= mix(1., uLayer > .5 ? .22 : .35, smoothstep(40., 400., cameraPosition.y - vPos.y));
+        a *= mix(1., .35, smoothstep(8000., 30000., cameraPosition.y - vPos.y)); // regional view: see through the deck
         float lightSide = cameraPosition.y > vPos.y ? 1. : .55;
         vec3 base = mix(vec3(.95), vec3(.38,.40,.44), uDark) * lightSide;
         vec3 col = base * (uSunColor * .55 + uSkyAmb * .9) + uFlash * vec3(.8,.85,1.);
@@ -70,7 +72,7 @@ function cloudMaterial(layer) {
 }
 
 export function createClouds() {
-  const geo = new THREE.PlaneGeometry(HALF_EXTENT_M * 6, HALF_EXTENT_M * 6, 1, 1).rotateX(-Math.PI / 2);
+  const geo = new THREE.PlaneGeometry(REGION_HALF_M * 5, REGION_HALF_M * 5, 1, 1).rotateX(-Math.PI / 2);
   const high = new THREE.Mesh(geo, cloudMaterial(0));
   const low = new THREE.Mesh(geo, cloudMaterial(1));
   high.renderOrder = 5; low.renderOrder = 6;

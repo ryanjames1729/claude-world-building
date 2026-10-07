@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildHydrology, RIVER_CLASS } from '../src/sim/hydrology.js';
-import { Simulation, precipType, IN } from '../src/sim/engine.js';
+import { Simulation, precipType, IN, bandAt } from '../src/sim/engine.js';
 import { localMs, sunPosition } from '../src/sim/clock.js';
 import { N, elev } from '../src/geo.js';
 
@@ -63,7 +63,7 @@ test('Blizzard of 93 buries the campus and the ridges get more', () => {
 
 test('ice storm accretes damaging glaze but no snow', () => {
   const sim = run('ice2005', 30);
-  const iceIn = Math.max(...sim.iceMm) / IN;
+  const iceIn = Math.max(...[650, 900, 1220].map((e) => bandAt(sim.iceMm, e))) / IN; // campus to ridges
   assert.ok(iceIn > 0.3 && iceIn < 1.2, `ice ${iceIn.toFixed(2)} in`);
   assert.ok(sim.treesDownFrac > 0.01);
 });

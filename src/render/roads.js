@@ -99,15 +99,30 @@ function roadMaterial() {
 }
 
 /** Builds draped road ribbons and a sample list used to evaluate road conditions. */
-export function buildRoads(ways, hydro, cover) {
+/**
+ * opts: { cellIndex, widthScale, clip(x, z) → true to skip, inRadius(x, z) } — the regional level passes its own grid
+ * lookup, wider ribbons (seen from tens of miles away) and clips out the detailed 5-mile core.
+ */
+export function buildRoads(ways, hydro, cover, opts = {}) {
+  const cIdx = opts.cellIndex || cellIndex, wScale = opts.widthScale || 1;
   const pos = [], attrs = { aElev: [], aHand: [], aDrainElev: [], aClass: [], aMajor: [], aHazard: [], aAcross: [] };
   const index = [];
   const samples = [];
   const rnd = mulberry32(77);
   let vcount = 0;
-  for (const way of ways) {
-    const K = KIND[way.kind] || KIND.residential;
-    const pts = way.pts.map(([lat, lon]) => llToXZ(lat, lon));
+  const list = [...ways];
+  for (const way of list) {
+    const K0 = KIND[way.kind] || KIND.residential, K = { ...K0, w: K0.w * wScale };
+    let pts = way.xz ? way.pts.map(([x, z]) => ({ x, z })) : way.pts.map(([lat, lon]) => llToXZ(lat, lon));
+    if (opts.clip && !way.noClip) {
+      // split the way where it enters the clipped area; keep the longest outside run (good enough for highways)
+      const runs = []; let cur = [];
+      for (const p of pts) { if (opts.clip(p.x, p.z)) { if (cur.length > 1) runs.push(cur); cur = []; } else cur.push(p); }
+      if (cur.length > 1) runs.push(cur);
+      for (const r of runs.slice(1)) list.push({ ...way, pts: r.map((p) => [p.x, p.z]), xz: true, noClip: true });
+      pts = runs[0] || [];
+    }
+    if (pts.length < 2) continue;
     // resample to ~20 m spacing
     const rs = [];
     for (let i = 0; i < pts.length - 1; i++) {
@@ -124,7 +139,7 @@ export function buildRoads(ways, hydro, cover) {
       let dx = q.x - o.x, dz = q.z - o.z; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
       const nx = -dz, nz = dx;
       const e = elevationAt(p.x, p.z);
-      const k = cellIndex(p.x, p.z);
+      const k = cIdx(p.x, p.z);
       const far = hydro.hand[k] > 100;
       for (const side of [-1, 1]) {
         const sx = p.x + nx * side * K.w / 2, sz = p.z + nz * side * K.w / 2;
@@ -140,7 +155,7 @@ export function buildRoads(ways, hydro, cover) {
       if (i % 3 === 0) {
         if (i % 15 === 0) blockR = rnd();
         samples.push({ x: p.x, z: p.z, e, k, far, major: K.major, name: way.name || '', len: 60, blockR, verts: [vcount - 2, vcount - 1],
-          inR: Math.hypot(p.x, p.z) <= RADIUS_M, shade: shadeAt(p.x, p.z, cover), service: way.kind === 'service' });
+          inR: opts.inRadius ? opts.inRadius(p.x, p.z) : Math.hypot(p.x, p.z) <= RADIUS_M, shade: shadeAt(p.x, p.z, cover), service: way.kind === 'service' });
       }
     }
     // extend each sample's vertex coverage to the following vertices for blocked coloring
@@ -166,7 +181,7 @@ function shadeAt(x, z, cover) {
   const gx = (elevationAt(x + d, z) - elevationAt(x - d, z)) / (2 * d), gz = (elevationAt(x, z + d) - elevationAt(x, z - d)) / (2 * d);
   const g = Math.hypot(gx, gz), slope = Math.atan(g) * 180 / Math.PI;
   const north = g > 1e-4 ? Math.max(0, gz / g) : 0; // ground rising to the south = facing north
-  const canopy = cover ? (1 - cover[cellIndex(x, z)]) * 0.45 : 0;
+  const canopy = cover && Math.abs(x) < 8800 && Math.abs(z) < 8800 ? (1 - cover[cellIndex(x, z)]) * 0.45 : 0;
   return Math.min(1, Math.min(1, slope / 12) * north + canopy);
 }
 
@@ -176,7 +191,7 @@ const bandLookup = (arr, e) => {
 };
 
 /** Returns a function the simulation calls to summarize road conditions within the 5-mile radius. */
-export function makeRoadEvaluator(roads, hydro, signals = []) {
+export function makeRoadEvaluator(roads, hydro, signals = [], opts = {}) {
   const slideCells = new Set();
   let slidesSeen = 0;
   const hazAttr = roads.mesh.geometry.attributes.aHazard;
@@ -189,6 +204,7 @@ export function makeRoadEvaluator(roads, hydro, signals = []) {
     return r.side === 'north' ? s.z < -250 : r.side === 'south' ? s.z > 250 : true;
   }) }));
   return (sim) => {
+    if (opts.noSlides) slidesSeen = sim.landslides.length;
     for (; slidesSeen < sim.landslides.length; slidesSeen++) {
       for (const k of sim.landslides[slidesSeen].path) for (const d of [0, 1, -1, N, -N, N + 1, N - 1, -N + 1, -N - 1]) slideCells.add(k + d);
     }

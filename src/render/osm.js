@@ -2,6 +2,7 @@
 // fetched in the browser from the public Overpass API. Falls back gracefully when offline.
 import { CENTER, RADIUS_M } from '../geo.js';
 import { OSM } from '../data/osm.js';
+import { OSM_REGION } from '../data/osm-region.js';
 
 const pairs = (flat) => { const out = []; for (let i = 0; i < flat.length; i += 2) out.push([flat[i], flat[i + 1]]); return out; };
 
@@ -35,6 +36,37 @@ export function saveOSMSnapshot() {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   return true;
+}
+
+/** Major roads within 30 miles (interstates, US & state highways, the Parkway). Downloads a snapshot file to bake in. */
+export async function saveRegionalSnapshot(onStatus) {
+  const { lat, lon } = CENTER;
+  const q = `[out:json][timeout:120];
+(
+  way["highway"~"^(motorway|trunk|primary|motorway_link|trunk_link)$"](around:50000,${lat},${lon});
+  way["highway"="secondary"]["ref"](around:50000,${lat},${lon});
+  way["highway"]["name"="Blue Ridge Parkway"](around:50000,${lat},${lon});
+);
+out tags geom;`;
+  for (const url of ENDPOINTS) {
+    try {
+      onStatus?.(`Downloading 30-mile highway data… (${new URL(url).host})`);
+      const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = new Blob([await res.text()], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = 'osm-region-snapshot.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      return true;
+    } catch { /* try the next endpoint */ }
+  }
+  return false;
+}
+
+/** Regional highways baked into the app (scripts/bake-osm.mjs --region), or null. */
+export function bakedRegionOSM() {
+  if (!OSM_REGION || !OSM_REGION.roads?.length) return null;
+  return OSM_REGION.roads.map((r) => ({ name: r.n, kind: r.k, pts: pairs(r.p) }));
 }
 
 export async function loadOSM(onStatus) {

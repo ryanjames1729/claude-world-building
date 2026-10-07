@@ -82,7 +82,9 @@ vec3 lighting(vec3 n, vec3 albedo, float shininess, float spec, vec3 viewDir){
 
 vec3 applyFog(vec3 col, vec3 worldPos, float elev){
   float dist = length(worldPos - cameraPosition);
-  float fogAmt = 1. - exp(-pow(uFogDensity * dist, 1.15));
+  // haze sits in the lowest few km of air: looking down from high up, most of the path is clear
+  float lowAir = clamp(3000. / (abs(cameraPosition.y - worldPos.y) + 1.), .07, 1.);
+  float fogAmt = 1. - exp(-pow(uFogDensity * dist * lowAir, 1.15));
   // valley (radiation) fog: dense below the fog top, feathered edge, a little texture
   float vf = uValleyFog * smoothstep(uValleyFogTop + 25., uValleyFogTop - 35., elev + (fbm(worldPos.xz * .0012 + uTime * .01) - .5) * 50.);
   fogAmt = max(fogAmt, vf * (1. - exp(-dist * .004)));

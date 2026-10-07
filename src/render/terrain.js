@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { N, CELL, HALF_EXTENT_M, elev, elevToY, slopeDeg, mulberry32, vexAt, iToX, jToZ } from '../geo.js';
 import { U, GLSL_COMMON, VEX_GLSL } from './common.js';
 import { inCampus } from '../campus-geo.js';
+import { RIVER_INFO } from '../sim/engine.js';
 
 /** Builds the terrain geometry. Water reuses the same geometry with a different material. */
 export function buildTerrainGeometry(hydro) {
@@ -26,7 +27,11 @@ export function buildTerrainGeometry(hydro) {
       const far = hydro.hand[k] > 100;
       // small creeks crossing the graded campus run through culverts: water only shows if they back up
       const culvert = hydro.drainClass[k] === 0 && inCampus(pos[k * 3], pos[k * 3 + 2]) ? 1.2 : 0;
-      hand[k] = far ? 999 : hydro.hand[k] + culvert;
+      // the elevation data already shows rivers at their normal water surface, so banks only flood once the
+      // river rises above normal: off-channel cells are offset by that class's normal depth
+      const bank = hydro.cls[k] >= 0 ? 0 : RIVER_INFO[hydro.drainClass[k]].base;
+      // flat ground below the spill point of a filled depression reads as 0 m above the river; give banks a floor
+      hand[k] = far ? 999 : (bank ? Math.max(hydro.hand[k], 0.4) : hydro.hand[k]) + culvert + bank;
       drainE[k] = far ? -999 : hydro.drainElev[k];
       cls[k] = far ? 0 : hydro.drainClass[k];
     }
@@ -122,11 +127,13 @@ export function terrainMaterial(landTex, campusGround) {
         canopy = mix(bare, canopy, leafAt(vElev));
         canopy = mix(canopy, vec3(.10,.20,.10), evergreen * (1. - leafAt(vElev) * .7));
         // ---- open / developed land: lawns, pasture, roofs & pavement
-        float paved = smoothstep(.45, .8, vnoise(vPos.xz * .015 + 9.)) * dev;
+        float paved = smoothstep(.6, .92, vnoise(vPos.xz * .015 + 9.)) * dev * .45;
+        // suburban texture: lots of small roofs and yards instead of one flat tone
+        float lots = step(.62, hash12(floor(vPos.xz / 22.)));
         vec3 grass = mix(vec3(.30,.40,.18), vec3(.45,.47,.25), fine);
         grass = mix(grass, vec3(.48,.44,.32), (1. - leafAt(vElev)) * .8);
-        vec3 urban = mix(vec3(.36,.36,.35), vec3(.47,.45,.42), fine);
-        vec3 open = mix(grass, urban, paved);
+        vec3 urban = mix(vec3(.42,.40,.36), vec3(.52,.49,.44), fine); // warm concrete & rooftops, not water-blue
+        vec3 open = mix(grass, urban, max(paved, lots * smoothstep(.5, .9, dev) * .6));
         vec3 col = mix(canopy, open, smoothstep(.35, .75, dev));
         // campus ground (lawns, lots, fields) digitized from the campus map
         if (uCampusRect.w > .5) {
@@ -146,8 +153,8 @@ export function terrainMaterial(landTex, campusGround) {
         // ---- landslide scars (fresh mud & rock)
         col = mix(col, mix(vec3(.40,.30,.19), vec3(.50,.42,.31), fine), land.a);
         // ---- flood mud left behind where water reached but has receded
-        float peakDepth = peakFor(vClass) + vDrainElev - vElev;
-        float nowDepth = stageFor(vClass) + vDrainElev - vElev;
+        float peakDepth = peakFor(vClass) - vHand;
+        float nowDepth = stageFor(vClass) - vHand;
         float mud = smoothstep(0., .4, peakDepth) * smoothstep(.2, -.3, nowDepth);
         col = mix(col, vec3(.40,.33,.24) * (.85 + fine * .3), mud * .85);
         // ---- wet surfaces darken

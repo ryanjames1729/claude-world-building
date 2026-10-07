@@ -10,10 +10,15 @@ import { roadRisk } from './traffic.js';
 import { CAMPUS_OPS } from '../data/campus-ops.js';
 import { HOUR, DAY, parseLocal, hourOfDay, dayOfYear, sunPosition, isSchoolDay, localMs } from './clock.js';
 
-export const BANDS = 8;
-export const BAND_ELEV0 = 600;
-export const BAND_STEP = 85;            // bands cover ~600 m (river) .. ~1200 m (ridgetops)
+export const BANDS = 16;
+export const BAND_ELEV0 = 550;
+export const BAND_STEP = 100;           // bands cover 550 m (river valleys) .. 2,050 m (Mt. Mitchell)
 export const bandElev = (b) => BAND_ELEV0 + b * BAND_STEP;
+/** Linear lookup of a per-band array at any elevation (m). */
+export function bandAt(arr, e) {
+  const f = Math.max(0, Math.min(BANDS - 1, (e - BAND_ELEV0) / BAND_STEP)), i = Math.floor(f), t = f - i;
+  return arr[i] * (1 - t) + arr[Math.min(BANDS - 1, i + 1)] * t;
+}
 export const MPH = 2.23694;
 export const IN = 25.4;
 

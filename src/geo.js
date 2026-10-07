@@ -1,5 +1,6 @@
 import { CENTER, HALF_EXTENT_M, GRID, RADIUS_M, REF_ELEV_M } from './geo-constants.js';
 import { TERRAIN_SIZE, TERRAIN_B64 } from './data/terrain.js';
+import { regionElevationAt } from './geo-region.js';
 
 export { CENTER, HALF_EXTENT_M, GRID, RADIUS_M, REF_ELEV_M };
 
@@ -38,6 +39,16 @@ export const elev = (() => {
   const raw = decode(TERRAIN_B64);
   const out = new Float32Array(raw.length);
   for (let i = 0; i < raw.length; i++) out[i] = raw[i] / 10;
+  // feather the outer 700 m of the detailed grid into the coarser regional terrain so the two levels meet
+  // without a step (the coarse grid smooths valleys and ridges by up to ~15 m)
+  const n = Math.round(Math.sqrt(raw.length)), cell = (2 * HALF_EXTENT_M) / (n - 1), FEATHER = 700;
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    const edge = Math.min(i, j, n - 1 - i, n - 1 - j) * cell;
+    if (edge >= FEATHER) continue;
+    const t = edge / FEATHER, w = t * t * (3 - 2 * t);
+    const x = -HALF_EXTENT_M + i * cell, z = -HALF_EXTENT_M + j * cell, k = j * n + i;
+    out[k] = out[k] * w + regionElevationAt(x, z) * (1 - w);
+  }
   return out;
 })();
 
@@ -52,8 +63,9 @@ export function cellIndex(x, z) {
   return j * N + i;
 }
 
-/** Bilinear elevation (m) at world x/z. */
+/** Bilinear elevation (m) at world x/z: the detailed grid inside the 5-mile core, the regional grid beyond it. */
 export function elevationAt(x, z) {
+  if (Math.abs(x) > HALF_EXTENT_M || Math.abs(z) > HALF_EXTENT_M) return regionElevationAt(x, z);
   const fi = Math.max(0, Math.min(N - 1.001, xToI(x)));
   const fj = Math.max(0, Math.min(N - 1.001, zToJ(z)));
   const i = Math.floor(fi), j = Math.floor(fj), a = fi - i, b = fj - j;

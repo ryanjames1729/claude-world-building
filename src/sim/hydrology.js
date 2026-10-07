@@ -3,7 +3,7 @@
 //  - D8 flow directions and flow accumulation (with upstream inflow for rivers that enter the map)
 //  - stream network classification
 //  - HAND ("height above nearest drainage"), the standard technique for rapid flood-inundation mapping
-import { N, CELL, elev, cellIndex, xToI, zToJ } from '../geo.js';
+import { N, CELL, elev, cellIndex, xToI, zToJ, N as N0, CELL as CELL0, elev as elev0 } from '../geo.js';
 
 export const RIVER_CLASS = { CREEK: 0, STREAM: 1, SWANNANOA: 2, FRENCH_BROAD: 3 };
 export const CLASS_NAMES = ['Creeks', 'Larger streams', 'Swannanoa River', 'French Broad River'];
@@ -38,12 +38,17 @@ class MinHeap {
 
 // Known places where major rivers enter the simulated square (grid search windows), with their
 // approximate upstream drainage area in km^2 (French Broad at Asheville ~2,450 km^2; Swannanoa ~340 km^2).
-const INFLOWS = [
+const INFLOWS0 = [
   { name: 'French Broad (from Hendersonville/Bent Creek)', edge: 'S', from: 140, to: 210, areaKm2: 2350 },
   { name: 'Swannanoa (from Black Mountain/Oteen)', edge: 'N', from: 380, to: 450, areaKm2: 330 },
 ];
 
-export function buildHydrology() {
+/**
+ * grid: { N, CELL, elev, inflows } — defaults to the detailed 5-mile grid. The regional (30-mile) grid passes its own
+ * coarser elevations; most of the French Broad basin lies inside it, so it needs no upstream inflows.
+ */
+export function buildHydrology(grid = {}) {
+  const N = grid.N ?? N0, CELL = grid.CELL ?? CELL0, elev = grid.elev ?? elev0, INFLOWS = grid.inflows ?? INFLOWS0;
   const total = N * N;
   const filled = new Float32Array(elev);
   const done = new Uint8Array(total);
@@ -139,7 +144,7 @@ export function buildHydrology() {
     hand[k] = Math.max(0, elev[k] - elev[d]);
     drainClass[k] = cls[d];
   }
-  return { filled, down, acc, cls, drain, hand, drainElev, drainClass, order, inflows: INFLOWS };
+  return { N, CELL, filled, down, acc, cls, drain, hand, drainElev, drainClass, order, inflows: INFLOWS };
 }
 
 /** Flood depth (m) at a world point for the current river stages (m above normal-dry channel). */
