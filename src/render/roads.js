@@ -104,7 +104,7 @@ function roadMaterial() {
  * lookup, wider ribbons (seen from tens of miles away) and clips out the detailed 5-mile core.
  */
 export function buildRoads(ways, hydro, cover, opts = {}) {
-  const cIdx = opts.cellIndex || cellIndex, wScale = opts.widthScale || 1;
+  const cIdx = opts.cellIndex || cellIndex, wScale = opts.widthScale || 1, step = opts.spacing || 20;
   const pos = [], attrs = { aElev: [], aHand: [], aDrainElev: [], aClass: [], aMajor: [], aHazard: [], aAcross: [] };
   const index = [];
   const samples = [];
@@ -126,7 +126,7 @@ export function buildRoads(ways, hydro, cover, opts = {}) {
     // resample to ~20 m spacing
     const rs = [];
     for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i], b = pts[i + 1], L = Math.hypot(b.x - a.x, b.z - a.z), n = Math.max(1, Math.ceil(L / 20));
+      const a = pts[i], b = pts[i + 1], L = Math.hypot(b.x - a.x, b.z - a.z), n = Math.max(1, Math.ceil(L / step));
       for (let s = 0; s < n; s++) rs.push({ x: a.x + (b.x - a.x) * s / n, z: a.z + (b.z - a.z) * s / n });
     }
     rs.push(pts[pts.length - 1]);
@@ -154,7 +154,7 @@ export function buildRoads(ways, hydro, cover, opts = {}) {
       // condition samples every ~60 m; a "block" draw shared along ~300 m stretches (one fallen tree closes a stretch)
       if (i % 3 === 0) {
         if (i % 15 === 0) blockR = rnd();
-        samples.push({ x: p.x, z: p.z, e, k, far, major: K.major, name: way.name || '', len: 60, blockR, verts: [vcount - 2, vcount - 1],
+        samples.push({ x: p.x, z: p.z, e, k, far, major: K.major, name: way.name || '', len: step * 3, blockR, verts: [vcount - 2, vcount - 1],
           inR: opts.inRadius ? opts.inRadius(p.x, p.z) : Math.hypot(p.x, p.z) <= RADIUS_M, shade: shadeAt(p.x, p.z, cover), service: way.kind === 'service' });
       }
     }

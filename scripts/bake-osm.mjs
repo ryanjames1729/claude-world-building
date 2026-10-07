@@ -9,14 +9,35 @@ const args = process.argv.slice(2).filter((a) => a !== '--region');
 const src = args[0] || (regional ? 'data/osm-region-snapshot.json' : 'data/osm-snapshot.json');
 const json = JSON.parse(fs.readFileSync(src, 'utf8'));
 const r5 = (v) => Math.round(v * 1e5) / 1e5;
-const flat = (geom) => geom.flatMap((g) => [r5(g.lat), r5(g.lon)]);
+// Douglas-Peucker in meters: regional highways are drawn from miles away, so ~15 m of detail is plenty
+function simplify(geom, tol) {
+  if (!tol || geom.length < 3) return geom;
+  const kx = 111320 * Math.cos(35.5 * Math.PI / 180), ky = 110574;
+  const keep = new Uint8Array(geom.length); keep[0] = keep[geom.length - 1] = 1;
+  const stack = [[0, geom.length - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop();
+    const ax = geom[a].lon * kx, ay = geom[a].lat * ky, bx = geom[b].lon * kx, by = geom[b].lat * ky;
+    const L = Math.hypot(bx - ax, by - ay) || 1;
+    let best = -1, bd = tol;
+    for (let i = a + 1; i < b; i++) {
+      const d = Math.abs((bx - ax) * (ay - geom[i].lat * ky) - (ax - geom[i].lon * kx) * (by - ay)) / L;
+      if (d > bd) { bd = d; best = i; }
+    }
+    if (best > 0) { keep[best] = 1; stack.push([a, best], [best, b]); }
+  }
+  return geom.filter((_, i) => keep[i]);
+}
+const flat = (geom) => simplify(geom, regional ? 15 : 0).flatMap((g) => [r5(g.lat), r5(g.lon)]);
 const roads = [], buildings = [], pitches = [], signals = [];
 let school = null;
 for (const el of json.elements || []) {
   const t = el.tags || {};
   if (el.type === 'node' && t.highway === 'traffic_signals') { signals.push(r5(el.lat), r5(el.lon)); continue; }
   if (el.type !== 'way' || !el.geometry) continue;
-  if (t.highway) roads.push({ n: t.name || t.ref || '', r: t.ref || '', k: t.highway, p: flat(el.geometry) });
+  if (t.highway === 'construction' || t.highway === 'proposed') continue;
+  // regional labels read better as route numbers ("I 40", "US 25"); local streets keep their names
+  if (t.highway) roads.push({ n: regional ? (t.ref || t.name || '').split(';')[0] : t.name || t.ref || '', r: t.ref || '', k: t.highway, p: flat(el.geometry) });
   else if (t.building) {
     const h = parseFloat(t.height) || (parseFloat(t['building:levels']) || 0) * 3.6 || (t.building === 'house' ? 7 : 9);
     buildings.push({ h: Math.round(h * 10) / 10, t: t.building, p: flat(el.geometry) });

@@ -137,7 +137,7 @@ export function createRegion(labels, mobile) {
   const setRoads = (ways) => {
     if (roads) { group.remove(roads.mesh); roads.mesh.geometry.dispose(); }
     roads = buildRoads(ways, rh, null, {
-      cellIndex: rCellIndex, widthScale: 3,
+      cellIndex: rCellIndex, widthScale: 3, spacing: 150,
       clip: (x, z) => Math.abs(x) < HOLE && Math.abs(z) < HOLE,
       inRadius: (x, z) => Math.hypot(x, z) <= REGION_RADIUS_M,
     });
