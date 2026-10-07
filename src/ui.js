@@ -2,7 +2,7 @@
 import { SCENARIOS } from './sim/scenarios.js';
 import { cToF, fToC } from './sim/climate.js';
 import { fmt, fmtShort, HOUR } from './sim/clock.js';
-import { MPH, IN, PTYPE_LABEL, RIVER_INFO } from './sim/engine.js';
+import { MPH, IN, PTYPE_LABEL, RIVER_INFO, bandAt } from './sim/engine.js';
 import { BUILDINGS } from './data/campus.js';
 
 const $ = (id) => document.getElementById(id);
@@ -124,7 +124,7 @@ export class UI {
 
   bindLayers() {
     const L = this.app.layers;
-    for (const [id, key] of [['t-labels', 'labels'], ['t-ring', 'ring'], ['t-roads', 'roads'], ['t-roadstatus', 'roadStatus'], ['t-trees', 'trees'], ['t-clouds', 'clouds'], ['t-precip', 'precip'], ['t-cars', 'cars']]) {
+    for (const [id, key] of [['t-labels', 'labels'], ['t-ring', 'ring'], ['t-roads', 'roads'], ['t-roadstatus', 'roadStatus'], ['t-trees', 'trees'], ['t-clouds', 'clouds'], ['t-precip', 'precip'], ['t-cars', 'cars'], ['t-region', 'region']]) {
       $(id).onchange = (e) => { L[key] = e.target.checked; if (key === 'roadStatus') $('road-legend').hidden = !e.target.checked; };
     }
     $('cam-presets').innerHTML = this.app.cameraPresets.map((p) => `<button data-cam="${p.id}">${p.label}</button>`).join('');
@@ -150,7 +150,7 @@ export class UI {
     const heavy = w.precip > (pt === 'rain' ? 7.6 : 2.5) ? 'Heavy ' : w.precip < (pt === 'rain' ? 1 : 0.3) ? 'Light ' : '';
     $('now-type').textContent = pt === 'none' ? (w.fog > 0.5 ? '🌫 Fog' : w.cloud > 0.8 ? '☁️ Overcast' : w.cloud > 0.35 ? '⛅ Partly cloudy' : s.sun.elevation > 0 ? '☀️ Clear' : '🌙 Clear') + (w.thunder > 0.1 ? ' · ⚡' : '')
       : `${ICON[pt]} ${heavy}${PTYPE_LABEL[pt].toLowerCase()}${w.thunder > 0.1 ? ' · ⚡ thunder' : ''}`;
-    $('now-label').textContent = `Feels like ${Math.round(s.feelsLikeF())}° · at campus (~2,130 ft)`;
+    $('now-label').textContent = `Feels like ${Math.round(s.feelsLikeF())}° · at campus (~2,180 ft)`;
     $('now-grid').innerHTML = [
       kv('Wind', `${compass(w.windDir)} ${Math.round(w.windMs * MPH)} mph`),
       kv('Gusts', `${Math.round(w.gustMs * MPH)} mph`),
@@ -158,8 +158,10 @@ export class UI {
       kv('Visibility', `${s.visibilityMi() < 1 ? s.visibilityMi().toFixed(2) : s.visibilityMi().toFixed(0)} mi`),
       kv('Humidity', `${Math.round(s.rh())}%`),
       kv('Cloud cover', `${Math.round(w.cloud * 100)}%`),
-      kv('Ridge temp (4,000 ft)', `${Math.round(cToF(s.bandT[7]))}°F`),
-      kv('Valley temp (2,000 ft)', `${Math.round(cToF(s.bandT[0]))}°F`),
+      kv('Valley (2,000 ft)', `${Math.round(cToF(bandAt(s.bandT, 610)))}°F`),
+      kv('Ridges (4,000 ft)', `${Math.round(cToF(bandAt(s.bandT, 1220)))}°F`),
+      kv('Mt. Mitchell (6,684 ft)', `${Math.round(cToF(bandAt(s.bandT, 2037)))}°F`),
+      kv('Mt. Mitchell snow', `${(bandAt(s.snowCm, 2037) / 2.54).toFixed(1)} in`),
     ].join('');
 
     // alerts
@@ -182,8 +184,15 @@ export class UI {
         + `</div><div class="hist">${decs.slice(1, 6).filter(([, x]) => x.status !== 'pending').map(([k, x]) => `${k.slice(5)}: ${lab[x.status].split(' —')[0]}`).join(' · ')}</div>`;
     } else $('school').innerHTML = '<div class="muted">Calls are made at 8 PM (for the next day) and 5:30 AM. Run the clock to see them.</div>';
 
-    // regional weather cams
+    // regional weather cams + highway status across the 30-mile region
     if (s.region) this.drawCams(s);
+    const rs = this.app.region?.summary;
+    if (rs) $('region-roads').textContent = `Regional highways${this.app.regionRoadsBaked ? '' : ' (approx. alignments)'}: ${rs.impassablePct < 0.5 && rs.hazardPct < 0.5 ? 'clear' : `${rs.impassablePct.toFixed(0)}% impassable · ${rs.icyPct.toFixed(0)}% icy · ${rs.snowPct.toFixed(0)}% snow-covered · ${rs.floodedPct.toFixed(0)}% flooded`}${rs.closures.length ? ` · closures: ${rs.closures.slice(0, 3).join(', ')}` : ''}`;
+    const sb = $('btn-save-region');
+    if (sb.hidden && !this.app.regionRoadsBaked && location.protocol.startsWith('http')) {
+      sb.hidden = false;
+      sb.onclick = async () => { this.toast('Downloading 30-mile highway data…'); const ok = await this.app.saveRegionalSnapshot(); this.toast(ok ? 'Saved osm-region-snapshot.json — send it to bake in real regional highways' : 'Could not reach OpenStreetMap — check your connection', ok ? '#3ecf73' : '#ff3d6e'); };
+    }
 
     // campus operations
     const rep = s.opsReport;

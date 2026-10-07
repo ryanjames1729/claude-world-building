@@ -2,6 +2,8 @@
 // and road safety for the routes families drive. Pure JavaScript (tested in Node).
 import { CAMPUS_OPS } from '../data/campus-ops.js';
 import { BUILDINGS } from '../data/campus.js';
+import { bandAt } from './engine.js';
+
 const MPH = 2.23694, IN = 25.4;
 
 export const LEVEL = { ok: 0, watch: 1, critical: 2 };
@@ -31,7 +33,7 @@ export class CampusOps {
   step(sim, dtH) {
     const c = this.cfg, w = sim.wx, rng = this.rng;
     const gust = w.gustMs * MPH;
-    const iceIn = Math.max(...sim.iceMm) / IN;
+    const iceIn = bandAt(sim.iceMm, 760) / IN; // ice on lines & trees around campus and nearby ridges
     const treeDelta = Math.max(0, sim.treesDownFrac - this.lastTrees);
     const newSlides = sim.landslides.length - this.lastSlides;
     this.lastTrees = sim.treesDownFrac; this.lastSlides = sim.landslides.length;

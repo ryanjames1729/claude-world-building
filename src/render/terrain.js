@@ -1,6 +1,8 @@
 import * as THREE from 'three';
-import { N, CELL, HALF_EXTENT_M, elev, elevToY, slopeDeg, mulberry32, VEX } from '../geo.js';
-import { U, GLSL_COMMON } from './common.js';
+import { N, CELL, HALF_EXTENT_M, elev, elevToY, slopeDeg, mulberry32, vexAt, iToX, jToZ } from '../geo.js';
+import { U, GLSL_COMMON, VEX_GLSL } from './common.js';
+import { inCampus } from '../campus-geo.js';
+import { RIVER_INFO } from '../sim/engine.js';
 
 /** Builds the terrain geometry. Water reuses the same geometry with a different material. */
 export function buildTerrainGeometry(hydro) {
@@ -13,16 +15,23 @@ export function buildTerrainGeometry(hydro) {
     for (let i = 0; i < N; i++) {
       const k = j * N + i;
       pos[k * 3] = -HALF_EXTENT_M + i * CELL;
-      pos[k * 3 + 1] = elevToY(elev[k]);
+      const vx = vexAt(pos[k * 3], pos[k * 3 + 2]);
+      pos[k * 3 + 1] = elevToY(elev[k], pos[k * 3], pos[k * 3 + 2]);
       pos[k * 3 + 2] = -HALF_EXTENT_M + j * CELL;
       const l = elev[j * N + Math.max(0, i - 1)], r = elev[j * N + Math.min(N - 1, i + 1)];
       const u = elev[Math.max(0, j - 1) * N + i], d = elev[Math.min(N - 1, j + 1) * N + i];
-      const nx = -(r - l) * VEX / (2 * CELL), nz = -(d - u) * VEX / (2 * CELL);
+      const nx = -(r - l) * vx / (2 * CELL), nz = -(d - u) * vx / (2 * CELL);
       const len = Math.hypot(nx, 1, nz);
       nor[k * 3] = nx / len; nor[k * 3 + 1] = 1 / len; nor[k * 3 + 2] = nz / len;
       uv[k * 2] = i / (N - 1); uv[k * 2 + 1] = 1 - j / (N - 1);
       const far = hydro.hand[k] > 100;
-      hand[k] = far ? 999 : hydro.hand[k];
+      // small creeks crossing the graded campus run through culverts: water only shows if they back up
+      const culvert = hydro.drainClass[k] === 0 && inCampus(pos[k * 3], pos[k * 3 + 2]) ? 1.2 : 0;
+      // the elevation data already shows rivers at their normal water surface, so banks only flood once the
+      // river rises above normal: off-channel cells are offset by that class's normal depth
+      const bank = hydro.cls[k] >= 0 ? 0 : RIVER_INFO[hydro.drainClass[k]].base;
+      // flat ground below the spill point of a filled depression reads as 0 m above the river; give banks a floor
+      hand[k] = far ? 999 : (bank ? Math.max(hydro.hand[k], 0.4) : hydro.hand[k]) + culvert + bank;
       drainE[k] = far ? -999 : hydro.drainElev[k];
       cls[k] = far ? 0 : hydro.drainClass[k];
     }
@@ -69,7 +78,8 @@ export function buildLandcover(hydro) {
     cover[k] = dev;
     data[k * 4] = dev * 255;
     const c = hydro.cls[k];
-    data[k * 4 + 1] = c < 0 ? 0 : c === 0 ? 120 : c === 1 ? 200 : 255;
+    const piped = c === 0 && inCampus(iToX(i), jToZ(j)); // culverted under campus
+    data[k * 4 + 1] = c < 0 || piped ? 0 : c === 0 ? 120 : c === 1 ? 200 : 255;
     data[k * 4 + 2] = (noise(i * 7.3, j * 7.3) * 0.6 + rnd() * 0.4) * 255;
     data[k * 4 + 3] = 0;
   }
@@ -87,10 +97,10 @@ export function terrainMaterial(landTex, campusGround) {
       attribute float aHand; attribute float aDrainElev; attribute float aClass;
       varying vec3 vPos; varying vec3 vNormal; varying vec2 vUv; varying float vElev;
       varying float vHand; varying float vClass; varying float vDrainElev;
-      uniform float uBaseElev, uVex;
+      ${VEX_GLSL}
       void main(){
         vPos = (modelMatrix * vec4(position, 1.)).xyz;
-        vNormal = normal; vUv = uv; vElev = position.y / uVex + uBaseElev;
+        vNormal = normal; vUv = uv; vElev = elevFromY(position.y, position.xz);
         vHand = aHand; vClass = aClass; vDrainElev = aDrainElev;
         gl_Position = projectionMatrix * viewMatrix * vec4(vPos, 1.);
       }`,
@@ -117,11 +127,13 @@ export function terrainMaterial(landTex, campusGround) {
         canopy = mix(bare, canopy, leafAt(vElev));
         canopy = mix(canopy, vec3(.10,.20,.10), evergreen * (1. - leafAt(vElev) * .7));
         // ---- open / developed land: lawns, pasture, roofs & pavement
-        float paved = smoothstep(.45, .8, vnoise(vPos.xz * .015 + 9.)) * dev;
+        float paved = smoothstep(.6, .92, vnoise(vPos.xz * .015 + 9.)) * dev * .45;
+        // suburban texture: lots of small roofs and yards instead of one flat tone
+        float lots = step(.62, hash12(floor(vPos.xz / 22.)));
         vec3 grass = mix(vec3(.30,.40,.18), vec3(.45,.47,.25), fine);
         grass = mix(grass, vec3(.48,.44,.32), (1. - leafAt(vElev)) * .8);
-        vec3 urban = mix(vec3(.36,.36,.35), vec3(.47,.45,.42), fine);
-        vec3 open = mix(grass, urban, paved);
+        vec3 urban = mix(vec3(.42,.40,.36), vec3(.52,.49,.44), fine); // warm concrete & rooftops, not water-blue
+        vec3 open = mix(grass, urban, max(paved, lots * smoothstep(.5, .9, dev) * .6));
         vec3 col = mix(canopy, open, smoothstep(.35, .75, dev));
         // campus ground (lawns, lots, fields) digitized from the campus map
         if (uCampusRect.w > .5) {
@@ -141,8 +153,8 @@ export function terrainMaterial(landTex, campusGround) {
         // ---- landslide scars (fresh mud & rock)
         col = mix(col, mix(vec3(.40,.30,.19), vec3(.50,.42,.31), fine), land.a);
         // ---- flood mud left behind where water reached but has receded
-        float peakDepth = peakFor(vClass) + vDrainElev - vElev;
-        float nowDepth = stageFor(vClass) + vDrainElev - vElev;
+        float peakDepth = peakFor(vClass) - vHand;
+        float nowDepth = stageFor(vClass) - vHand;
         float mud = smoothstep(0., .4, peakDepth) * smoothstep(.2, -.3, nowDepth);
         col = mix(col, vec3(.40,.33,.24) * (.85 + fine * .3), mud * .85);
         // ---- wet surfaces darken

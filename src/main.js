@@ -12,10 +12,13 @@ import { createPrecip, createLightning } from './render/precip.js';
 import { createForest } from './render/trees.js';
 import { createCampus, structureMaterial, drapedRect } from './render/campus.js';
 import { buildRoads, makeRoadEvaluator, fallbackRoads, campusDrives, fallbackSignals } from './render/roads.js';
-import { loadOSM, saveOSMSnapshot } from './render/osm.js';
+import { loadOSM, saveOSMSnapshot, bakedOSM, bakedRegionOSM, saveRegionalSnapshot } from './render/osm.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { inCampus } from './campus-geo.js';
 import { Labels } from './render/labels.js';
 import { createTraffic } from './render/cars.js';
+import { createRegion } from './render/region.js';
+import { REGION_HALF_M } from './geo-region.js';
 import { UI } from './ui.js';
 
 const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -38,7 +41,7 @@ async function main() {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 5, 150000);
+  const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 5, 600000);
 
   await nextFrame();
   loadingText.textContent = 'Tracing rivers and creeks from the terrain…';
@@ -51,6 +54,12 @@ async function main() {
   const geo = buildTerrainGeometry(hydro);
   const land = buildLandcover(hydro);
   const labels = new Labels(document.getElementById('app'));
+  loadingText.textContent = 'Building the 30-mile region…';
+  await nextFrame();
+  const region = createRegion(labels, mobile);
+  const regionRoads = bakedRegionOSM();
+  if (regionRoads) region.setRoads(regionRoads);
+  scene.add(region.group);
   const campus = createCampus(labels);
   scene.add(campus.group);
   const terrain = new THREE.Mesh(geo, terrainMaterial(land.tex, campus.ground));
@@ -120,13 +129,14 @@ async function main() {
   controls.dampingFactor = 0.08;
   controls.maxPolarAngle = Math.PI * 0.49;
   controls.minDistance = 40;
-  controls.maxDistance = 32000;
+  controls.maxDistance = 170000;
   controls.screenSpacePanning = false;
   const at = (lat, lon) => { const p = llToXZ(lat, lon); return new THREE.Vector3(p.x, groundY(p.x, p.z), p.z); };
   const campusT = new THREE.Vector3(0, groundY(0, 0), 0);
   const cameraPresets = [
     { id: 'campus', label: '🏫 Campus', target: campusT, offset: new THREE.Vector3(260, 300, 480) },
     { id: 'overview', label: '🗺 5-mile view', target: campusT, offset: new THREE.Vector3(2500, 11500, 12500) },
+    { id: 'region', label: '🏔 30-mile region', target: campusT, offset: new THREE.Vector3(8000, 62000, 72000) },
     { id: 'biltmore', label: '🌊 Biltmore Village', target: at(35.5655, -82.548), offset: new THREE.Vector3(1100, 900, 1500) },
     { id: 'river', label: '🏞 French Broad', target: at(35.545, -82.565), offset: new THREE.Vector3(-1800, 1400, 2200) },
     { id: 'downtown', label: '🏙 Downtown', target: at(35.592, -82.551), offset: new THREE.Vector3(1200, 1000, 1800) },
@@ -141,10 +151,10 @@ async function main() {
   controls.target.copy(campusT);
 
   // ---- app state shared with the UI
-  const layers = { labels: true, ring: true, roads: true, roadStatus: false, trees: true, clouds: true, precip: true, cars: true };
+  const layers = { labels: true, ring: true, roads: true, roadStatus: false, trees: true, clouds: true, precip: true, cars: true, region: true };
   let playing = true;
   const app = {
-    layers, cameraPresets, flyTo, saveOSMSnapshot,
+    layers, cameraPresets, flyTo, saveOSMSnapshot, saveRegionalSnapshot, regionRoadsBaked: !!regionRoads, region,
     speed: 0.166667,
     togglePlay() { playing = !playing; ui.setPlaying(playing); },
     play(p) { playing = p; ui.setPlaying(playing); },
@@ -174,8 +184,8 @@ async function main() {
   sim.on('reset', () => { clearScars(land); forest.reset(); peakStage.fill(0); });
   app.jumpToNow();
 
-  // ---- OpenStreetMap detail (real roads & buildings) when online
-  loadOSM((t) => ui.setOSMStatus(t)).then((osm) => {
+  // ---- OpenStreetMap detail (real roads, signals & buildings): baked into the app, or fetched live if not
+  const applyOSM = (osm) => {
     if (osm.roads.length < 20) throw new Error('too few roads');
     scene.remove(roads.mesh);
     roads.mesh.geometry.dispose();
@@ -187,6 +197,7 @@ async function main() {
     labelRoads(osm.roads);
     const bgroup = new THREE.Group();
     const wallMat = structureMaterial(0xb9a68e), houseMat = structureMaterial(0xc9c2b4);
+    const houseGeos = [], otherGeos = [];
     for (const b of osm.buildings) {
       const pts = b.pts.map(([la, lo]) => llToXZ(la, lo));
       if (pts.length < 4 || inCampus(pts[0].x, pts[0].z)) continue; // campus buildings come from the campus map
@@ -195,8 +206,10 @@ async function main() {
       const h = b.h * 1.3 + 4;
       const g = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false }).rotateX(-Math.PI / 2);
       g.translate(0, lo - 3, 0);
-      bgroup.add(new THREE.Mesh(g, b.type === 'house' || b.type === 'residential' ? houseMat : wallMat));
+      (b.type === 'house' || b.type === 'residential' ? houseGeos : otherGeos).push(g.index ? g.toNonIndexed() : g);
     }
+    // one draw call per material instead of one per building
+    for (const [geos, mat] of [[houseGeos, houseMat], [otherGeos, wallMat]]) if (geos.length) bgroup.add(new THREE.Mesh(mergeGeometries(geos), mat));
     for (const p of osm.pitches) {
       const pts = p.pts.map(([la, lo]) => llToXZ(la, lo));
       if (pts.length < 4 || inCampus(pts[0].x, pts[0].z)) continue;
@@ -205,8 +218,12 @@ async function main() {
       bgroup.add(drapedRect(cx, cz, Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs), 0, p.kind === 'track' ? 0x9a4a3a : 0x3f7a35, true));
     }
     scene.add(bgroup);
-    ui.setOSMStatus(`Real roads, ${osm.signals.length} traffic signals & ${osm.buildings.length} buildings loaded from OpenStreetMap${osm.source === 'snapshot' ? ' (saved copy)' : ''}.`, osm.source === 'live');
-  }).catch(() => ui.setOSMStatus('Roads: approximate major corridors (OpenStreetMap unavailable offline).'));
+    const when = osm.date ? ` (map data as of ${new Date(osm.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})` : '';
+    ui.setOSMStatus(`Real roads, ${osm.signals.length} traffic signals & ${osm.buildings.length} buildings from OpenStreetMap${when}. © OpenStreetMap contributors.`, osm.source === 'live');
+  };
+  const baked = bakedOSM();
+  if (baked) applyOSM(baked);
+  else loadOSM((t) => ui.setOSMStatus(t)).then(applyOSM).catch(() => ui.setOSMStatus('Roads: approximate major corridors (OpenStreetMap unavailable offline).'));
 
   // ---- per-frame visual sync from simulation state
   const sunV = new THREE.Vector3();
@@ -232,10 +249,10 @@ async function main() {
     const fogDay = new THREE.Color(0.68, 0.75, 0.84).lerp(new THREE.Color(0.6, 0.62, 0.65), overcast).lerp(new THREE.Color(0.45, 0.47, 0.5), storm);
     U.uFogColor.value.copy(new THREE.Color(0.03, 0.035, 0.05).lerp(fogDay, day));
     const vis = sim.visibilityMi() * 1609;
-    U.uFogDensity.value = 0.45 / Math.max(vis, 300) + 6e-6;
+    // clear-day haze is lighter so the 30-mile view still shows the far ridges
+    U.uFogDensity.value = (vis > 15000 ? 0.18 / vis : 0.45 / Math.max(vis, 300)) + 3e-6;
     U.uValleyFog.value = w.fog;
     U.uValleyFogTop.value = 640 + w.fog * 110;
-    fogSheet.position.y = elevToY(U.uValleyFogTop.value);
     fogSheet.visible = w.fog > 0.05;
     for (let b = 0; b < BANDS; b++) { U.uSnow.value[b] = sim.snowCm[b]; U.uIce.value[b] = sim.iceMm[b]; }
     wet += ((w.precip > 0.1 || sim.campus.snowCm > 0 && sim.campus.tempC > 0 ? 1 : 0) - wet) * Math.min(1, simDtH / (w.precip > 0.1 ? 0.5 : 6));
@@ -297,19 +314,24 @@ async function main() {
     }
     controls.update();
     // keep the camera above ground and inside the world
-    const minY = groundY(THREE.MathUtils.clamp(camera.position.x, -HALF_EXTENT_M, HALF_EXTENT_M), THREE.MathUtils.clamp(camera.position.z, -HALF_EXTENT_M, HALF_EXTENT_M)) + 25;
+    const minY = groundY(THREE.MathUtils.clamp(camera.position.x, -REGION_HALF_M, REGION_HALF_M), THREE.MathUtils.clamp(camera.position.z, -REGION_HALF_M, REGION_HALF_M)) + 25;
     if (camera.position.y < minY) camera.position.y = minY;
-    controls.target.x = THREE.MathUtils.clamp(controls.target.x, -HALF_EXTENT_M, HALF_EXTENT_M);
-    controls.target.z = THREE.MathUtils.clamp(controls.target.z, -HALF_EXTENT_M, HALF_EXTENT_M);
+    controls.target.x = THREE.MathUtils.clamp(controls.target.x, -REGION_HALF_M, REGION_HALF_M);
+    controls.target.z = THREE.MathUtils.clamp(controls.target.z, -REGION_HALF_M, REGION_HALF_M);
+    // keep depth precision good both on campus and at the 30-mile view
+    const camDist = camera.position.distanceTo(controls.target);
+    const near = THREE.MathUtils.clamp(camDist / 700, 2, 250);
+    if (Math.abs(near - camera.near) > camera.near * 0.2) { camera.near = near; camera.updateProjectionMatrix(); }
     sky.mesh.position.copy(camera.position);
     precip.update(sim, camera, controls.target, renderer.getPixelRatio());
     lightning.update(sim, dt, playing, controls.target, groundY);
     traffic.update(sim, dt, layers.cars && layers.roads, U.uNight.value);
     const now = performance.now();
-    if (now - lastSync > 300) { lastSync = now; forest.sync(sim.treesDownFrac, U.uTime.value, sim.wx.windDir); }
+    if (now - lastSync > 300) { lastSync = now; forest.sync(sim.treesDownFrac, U.uTime.value, sim.wx.windDir); region.update(sim, layers.region); }
     if (now - lastUI > 250) { lastUI = now; ui.update(); }
     hidden.clear();
     if (!layers.roads) hidden.add('road');
+    if (!layers.region) hidden.add('region');
     labels.update(camera, window.innerWidth, window.innerHeight, hidden);
     renderer.render(scene, camera);
   }
@@ -320,7 +342,7 @@ async function main() {
   });
   // handy for debugging & automated screenshots: advance the simulation quickly by N hours
   const advance = (hours) => { for (let i = 0; i < hours * 12; i++) sim.step(1 / 12); forest.sync(sim.treesDownFrac, U.uTime.value - 5, sim.wx.windDir); };
-  window.__cds = { sim, app, camera, controls, ui, U, advance, traffic };
+  window.__cds = { sim, app, camera, controls, ui, U, advance, traffic, region, scene, terrain, water };
   frame();
 }
 

@@ -1,5 +1,6 @@
 import { CENTER, HALF_EXTENT_M, GRID, RADIUS_M, REF_ELEV_M } from './geo-constants.js';
 import { TERRAIN_SIZE, TERRAIN_B64 } from './data/terrain.js';
+import { regionElevationAt } from './geo-region.js';
 
 export { CENTER, HALF_EXTENT_M, GRID, RADIUS_M, REF_ELEV_M };
 
@@ -8,11 +9,19 @@ export const M_PER_DEG_LON = 111320 * Math.cos(CENTER.lat * Math.PI / 180);
 export const N = TERRAIN_SIZE;                 // vertices per side
 export const CELL = (2 * HALF_EXTENT_M) / (N - 1);
 export const BASE_ELEV = 580;                   // elevation mapped to y = 0
-export const VEX = 1.5;                         // vertical exaggeration so the ridges read well
+// Vertical exaggeration: true scale (1×) around campus so its gentle grades look right, blending to 1.5× in the
+// surrounding mountains so the ridges and valleys read clearly on the 5-mile map.
+export const VEX = 1.5;
+export const VEX_NEAR = 1.0, VEX_R0 = 1200, VEX_R1 = 3500;
+export function vexAt(x, z) {
+  const t = Math.max(0, Math.min(1, (Math.hypot(x, z) - VEX_R0) / (VEX_R1 - VEX_R0)));
+  return VEX_NEAR + (VEX - VEX_NEAR) * t * t * (3 - 2 * t);
+}
 
 export const llToXZ = (lat, lon) => ({ x: (lon - CENTER.lon) * M_PER_DEG_LON, z: -(lat - CENTER.lat) * M_PER_DEG_LAT });
 export const xzToLL = (x, z) => ({ lat: CENTER.lat - z / M_PER_DEG_LAT, lon: CENTER.lon + x / M_PER_DEG_LON });
-export const elevToY = (e) => (e - BASE_ELEV) * VEX;
+/** World y for an elevation; pass x, z for the local exaggeration (omitted = mountain scale, e.g. cloud decks). */
+export const elevToY = (e, x = 1e9, z = 0) => (e - BASE_ELEV) * vexAt(x, z);
 
 function decode(b64) {
   if (typeof atob === 'function') {
@@ -30,6 +39,16 @@ export const elev = (() => {
   const raw = decode(TERRAIN_B64);
   const out = new Float32Array(raw.length);
   for (let i = 0; i < raw.length; i++) out[i] = raw[i] / 10;
+  // feather the outer 700 m of the detailed grid into the coarser regional terrain so the two levels meet
+  // without a step (the coarse grid smooths valleys and ridges by up to ~15 m)
+  const n = Math.round(Math.sqrt(raw.length)), cell = (2 * HALF_EXTENT_M) / (n - 1), FEATHER = 700;
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    const edge = Math.min(i, j, n - 1 - i, n - 1 - j) * cell;
+    if (edge >= FEATHER) continue;
+    const t = edge / FEATHER, w = t * t * (3 - 2 * t);
+    const x = -HALF_EXTENT_M + i * cell, z = -HALF_EXTENT_M + j * cell, k = j * n + i;
+    out[k] = out[k] * w + regionElevationAt(x, z) * (1 - w);
+  }
   return out;
 })();
 
@@ -44,15 +63,16 @@ export function cellIndex(x, z) {
   return j * N + i;
 }
 
-/** Bilinear elevation (m) at world x/z. */
+/** Bilinear elevation (m) at world x/z: the detailed grid inside the 5-mile core, the regional grid beyond it. */
 export function elevationAt(x, z) {
+  if (Math.abs(x) > HALF_EXTENT_M || Math.abs(z) > HALF_EXTENT_M) return regionElevationAt(x, z);
   const fi = Math.max(0, Math.min(N - 1.001, xToI(x)));
   const fj = Math.max(0, Math.min(N - 1.001, zToJ(z)));
   const i = Math.floor(fi), j = Math.floor(fj), a = fi - i, b = fj - j;
   const k = j * N + i;
   return (elev[k] * (1 - a) + elev[k + 1] * a) * (1 - b) + (elev[k + N] * (1 - a) + elev[k + N + 1] * a) * b;
 }
-export const groundY = (x, z) => elevToY(elevationAt(x, z));
+export const groundY = (x, z) => elevToY(elevationAt(x, z), x, z);
 
 /** Slope in degrees (true, unexaggerated) at a cell. */
 export function slopeDeg(k) {

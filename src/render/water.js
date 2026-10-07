@@ -1,34 +1,38 @@
 import * as THREE from 'three';
-import { U, GLSL_COMMON } from './common.js';
+import { U, GLSL_COMMON, VEX_GLSL } from './common.js';
 
 /** River & flood water: per vertex, water surface = nearest-drainage elevation + current river stage (HAND method). */
-export function waterMaterial() {
+export function waterMaterial(hole = 0) {
   return new THREE.ShaderMaterial({
-    uniforms: { ...U },
+    uniforms: { ...U, uHole: { value: hole } },
     transparent: true,
     depthWrite: false,
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
     vertexShader: /* glsl */`
       attribute float aHand; attribute float aDrainElev; attribute float aClass;
-      uniform float uBaseElev, uVex;
+      ${VEX_GLSL}
       uniform vec4 uStages;
       varying vec3 vPos; varying float vDepth; varying float vClass; varying float vElev;
       float stageFor(float c){ return c < .5 ? uStages.x : c < 1.5 ? uStages.y : c < 2.5 ? uStages.z : uStages.w; }
       void main(){
-        float ground = position.y / uVex + uBaseElev;
-        float water = aDrainElev + stageFor(aClass);
-        vDepth = water - ground;
+        float vx = vexAt(position.xz);
+        float ground = position.y / vx + uBaseElev;
+        // depth = river stage minus height above the nearest channel (aHand already includes bank height)
+        vDepth = stageFor(aClass) - aHand;
+        float water = ground + vDepth;
         vClass = aClass;
-        float y = vDepth > 0. ? (water - uBaseElev) * uVex : position.y - 2.;
+        float y = vDepth > 0. ? (water - uBaseElev) * vx : position.y - 2.;
         vElev = max(ground, water);
         vPos = (modelMatrix * vec4(position.x, y, position.z, 1.)).xyz;
         gl_Position = projectionMatrix * viewMatrix * vec4(vPos, 1.);
       }`,
     fragmentShader: /* glsl */`
       ${GLSL_COMMON}
+      uniform float uHole;
       varying vec3 vPos; varying float vDepth; varying float vClass; varying float vElev;
       void main(){
         if (vDepth < .04) discard;
+        if (max(abs(vPos.x), abs(vPos.z)) < uHole) discard; // the detailed core draws its own water
         float rise = riseFor(vClass);
         // ripples flowing with the wind and the current
         vec2 p = vPos.xz * .012;

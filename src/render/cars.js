@@ -2,7 +2,7 @@
 // stop and turn around at flooded or blocked roads, line up for carpool, and occasionally slide off on ice.
 import * as THREE from 'three';
 import { llToXZ, groundY } from '../geo.js';
-import { U, GLSL_COMMON } from './common.js';
+import { U, GLSL_COMMON, VEX_GLSL } from './common.js';
 import { trafficProfile, carpool } from '../sim/traffic.js';
 
 const LIMIT = { motorway: 29, trunk: 24, primary: 18, secondary: 16, tertiary: 13, unclassified: 11, residential: 10, service: 4,
@@ -17,10 +17,10 @@ function carMaterial() {
     vertexShader: /* glsl */`
       attribute vec3 aColor; attribute float aFlash;
       varying vec3 vPos; varying vec3 vNormal; varying vec3 vColor; varying float vFlash; varying float vElev;
-      uniform float uBaseElev, uVex;
+      ${VEX_GLSL}
       void main(){ vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.); vPos = wp.xyz;
         vNormal = normalize(mat3(modelMatrix * instanceMatrix) * normal); vColor = aColor; vFlash = aFlash;
-        vElev = wp.y / uVex + uBaseElev; gl_Position = projectionMatrix * viewMatrix * wp; }`,
+        vElev = elevFromY(wp.y, wp.xz); gl_Position = projectionMatrix * viewMatrix * wp; }`,
     fragmentShader: /* glsl */`
       ${GLSL_COMMON}
       varying vec3 vPos; varying vec3 vNormal; varying vec3 vColor; varying float vFlash; varying float vElev;

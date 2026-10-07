@@ -40,8 +40,8 @@ export const CAMPUS_OPS = {
   roads: {
     // Routes families use, with a rough share of drivers (aggregate only — no addresses).
     routes: [
-      { name: 'Hendersonville Rd north (Biltmore Village, I-40, downtown)', share: 0.45, road: 'Hendersonville Rd', side: 'north' },
-      { name: 'Hendersonville Rd south (Skyland, Arden, I-26)', share: 0.35, road: 'Hendersonville Rd', side: 'south' },
+      { name: 'Hendersonville Rd north (Biltmore Village, I-40, downtown)', share: 0.45, road: 'Hendersonville', side: 'north' },
+      { name: 'Hendersonville Rd south (Skyland, Arden, I-26)', share: 0.35, road: 'Hendersonville', side: 'south' },
       { name: 'Biltmore Forest / Stuyvesant Rd', share: 0.2, road: 'Stuyvesant', side: 'west' },
     ],
     trafficSignalsHaveBackup: false,

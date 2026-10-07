@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { elevationAt, elevToY, slopeDeg, cellIndex } from '../geo.js';
-import { U, GLSL_COMMON } from './common.js';
+import { elevationAt, elevToY, groundY, slopeDeg, cellIndex } from '../geo.js';
+import { U, GLSL_COMMON, VEX_GLSL } from './common.js';
 
 // Carolina Day School campus, built from the digitized campus map (src/data/campus.js).
 import { BUILDINGS, SURFACES, POINTS } from '../data/campus.js';
@@ -13,9 +13,9 @@ export function structureMaterial(color, opts = {}) {
       uPowered: { value: 1 }, uStatusColor: { value: new THREE.Color(0, 0, 0) } },
     vertexShader: /* glsl */`
       varying vec3 vPos; varying vec3 vNormal; varying float vElev;
-      uniform float uBaseElev, uVex;
+      ${VEX_GLSL}
       void main(){ vec4 wp = modelMatrix * vec4(position, 1.); vPos = wp.xyz; vNormal = normalize(mat3(modelMatrix) * normal);
-        vElev = wp.y / uVex + uBaseElev; gl_Position = projectionMatrix * viewMatrix * wp; }`,
+        vElev = elevFromY(wp.y, wp.xz); gl_Position = projectionMatrix * viewMatrix * wp; }`,
     fragmentShader: /* glsl */`
       ${GLSL_COMMON}
       uniform vec3 uColor, uStatusColor; uniform float uRoof, uPowered;
@@ -53,7 +53,7 @@ export function drapedRect(x, z, w, d, rot, color, lines = false) {
   for (let i = 0; i < p.count; i++) {
     const lx = p.getX(i), lz = p.getZ(i);
     const wx = x + lx * c - lz * s, wz = z + lx * s + lz * c;
-    p.setXYZ(i, wx, elevToY(elevationAt(wx, wz)) + 1.2, wz);
+    p.setXYZ(i, wx, groundY(wx, wz) + 1.2, wz);
   }
   g.computeVertexNormals();
   const mat = structureMaterial(color);
@@ -131,7 +131,7 @@ export function createCampus(labels) {
   for (const b of BUILDINGS) {
     const parts = b.parts || [b.poly];
     let lo = Infinity, hi = -Infinity;
-    for (const p of parts) for (const q of polyXZ(p)) { const y = elevToY(elevationAt(q.x, q.z)); lo = Math.min(lo, y); hi = Math.max(hi, y); }
+    for (const p of parts) for (const q of polyXZ(p)) { const y = groundY(q.x, q.z); lo = Math.min(lo, y); hi = Math.max(hi, y); }
     const H = (b.height || b.floors * 4.2) * 1.15 + (hi - lo) + 1;
     const wall = structureMaterial(b.id === 9 ? 0xb8b3a8 : 0xb79a7c, { roof: b.roof !== 'flat' });
     const meshes = parts.map((p) => extrude(p, lo - 1, H, wall));
@@ -143,7 +143,7 @@ export function createCampus(labels) {
   }
   for (const p of POINTS) {
     const q = pxToXZ(p.px);
-    labels?.add(p.name, new THREE.Vector3(q.x, elevToY(elevationAt(q.x, q.z)) + 8, q.z), { cls: 'campus-pt', group: 'campus', maxDist: 1100 });
+    labels?.add(p.name, new THREE.Vector3(q.x, groundY(q.x, q.z) + 8, q.z), { cls: 'campus-pt', group: 'campus', maxDist: 1100 });
   }
   // trees stay off lawns, lots and buildings; the Woodlands get a dense stand
   const blockers = SURFACES.filter((s) => s.kind !== 'woods' && s.poly).map((s) => polyXZ(s.poly));

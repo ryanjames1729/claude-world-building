@@ -2,6 +2,7 @@
 // The storm over Asheville drives everything; each site differs by elevation (temperature, rain vs. snow,
 // extra mountain precipitation), local rivers, and exposure. Locations and elevations are approximate.
 import { BANDS, BAND_ELEV0, BAND_STEP, precipType } from './engine.js';
+import { CENTER as CAMPUS } from '../geo-constants.js';
 
 const MI = 1609.34;
 export const SITES = [
@@ -16,7 +17,6 @@ export const SITES = [
   { id: 'brp-pisgah', name: 'Blue Ridge Parkway near Mt. Pisgah', road: 'BRP', lat: 35.402, lon: -82.750, elev: 1480, exposure: 1.3, steep: true },
 ];
 
-const CAMPUS = { lat: 35.5236, lon: -82.5272 };
 for (const s of SITES) {
   const dx = (s.lon - CAMPUS.lon) * 111320 * Math.cos(CAMPUS.lat * Math.PI / 180), dz = (s.lat - CAMPUS.lat) * 110574;
   s.distMi = Math.hypot(dx, dz) / MI;
