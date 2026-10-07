@@ -8,6 +8,7 @@ import { CampusOps, LEVEL } from './ops.js';
 import { regionalConditions, regionalSummary } from './region.js';
 import { roadRisk } from './traffic.js';
 import { CAMPUS_OPS } from '../data/campus-ops.js';
+import { LiveFeed, USGS_SITES } from './live.js';
 import { HOUR, DAY, parseLocal, hourOfDay, dayOfYear, sunPosition, isSchoolDay, localMs } from './clock.js';
 
 export const BANDS = 16;
@@ -56,6 +57,7 @@ export class Simulation {
     this.bandAreaFrac = this.computeBandAreas();
     this.slideCandidates = this.computeSlideCandidates();
     this.ops = new CampusOps(mulberry32(seed + 11));
+    this.live = new LiveFeed();
     const now = new Date();
     this.reset(localMs(now.getFullYear(), now.getMonth() + 1, now.getDate(), 7, 0));
   }
@@ -127,7 +129,11 @@ export class Simulation {
 
   setMode(mode, scenarioId) {
     this.mode = mode;
-    if (mode === 'scenario') {
+    if (mode === 'live') {
+      // start 48 h back so the model spins up on real observations (snow on the ground, wet soil, river levels)
+      this.reset(this.live.start ?? this.t, { soil: this.liveSoil() });
+      this.assimilateGauges(1);
+    } else if (mode === 'scenario') {
       this.scenario = SCENARIOS.find((s) => s.id === scenarioId);
       this.scenario.keysT = this.scenario.keys.map((k) => ({ ...k, ms: parseLocal(k.t) }));
       this.scenario.endMs = parseLocal(this.scenario.end);
@@ -177,7 +183,29 @@ export class Simulation {
       return this.climate.target(this.t, dtH);
     }
     if (this.mode === 'manual') return this.manualTargets();
+    if (this.mode === 'live' && this.live.covers(this.t)) return this.live.targets(this.t);
+    if (this.mode === 'live') this.note = this.live.hasData() ? 'Past the end of the NWS forecast: weather now follows Asheville\'s normal climate.' : '';
     return this.climate.target(this.t, dtH);
+  }
+
+  /** Initial soil wetness in live mode, judged from how high the French Broad is running. */
+  liveSoil() {
+    const g = this.live.gauges[USGS_SITES.frenchBroad];
+    if (!g || g.ft == null) return 0.45;
+    return Math.max(0.3, Math.min(0.95, 0.4 + 0.06 * (g.ft - RIVERS[3].gaugeBaseFt)));
+  }
+
+  /** Pull the modeled rivers toward the real USGS gauge heights (weight 1 = snap, smaller = nudge). */
+  assimilateGauges(weight = 0.5) {
+    const map = [[3, USGS_SITES.frenchBroad], [2, USGS_SITES.swannanoa]];
+    for (const [r, site] of map) {
+      const g = this.live.gauges[site];
+      if (!g || g.ft == null) continue;
+      const rise = Math.max(0, (g.ft - RIVERS[r].gaugeBaseFt) / 3.281);
+      const Q = 0.1 + (rise / RIVERS[r].a) ** (1 / STAGE_EXP);
+      this.Q[r] += (Q - this.Q[r]) * weight;
+    }
+    this.updateStages();
   }
 
   applyTargets(g, dtH, snap = 0) {
@@ -293,6 +321,10 @@ export class Simulation {
       this.Q[r] += (inflow - this.Q[r]) * (1 - Math.exp(-dtH / RIVERS[r].tau));
     }
     this.updateStages();
+    // live mode near the present: keep the big rivers pinned to the real USGS gauges (data assimilation)
+    if (this.mode === 'live' && this.live.meta.gaugeTime && this.liveNow && Math.abs(this.t - this.liveNow()) < 3 * HOUR) {
+      this.assimilateGauges(1 - Math.exp(-dtH / 1.5));
+    }
     this.peak.fb = Math.max(this.peak.fb, this.gaugeFt(3));
     this.peak.sw = Math.max(this.peak.sw, this.gaugeFt(2));
 
@@ -381,6 +413,7 @@ export class Simulation {
 
   /** Look-ahead over scripted scenario weather (null outside scenarios). */
   forecast(hours) {
+    if (this.mode === 'live') return this.liveForecast(hours);
     if (this.mode !== 'scenario' || !this.scenario || this.t > this.scenario.endMs) return null;
     let maxGustMph = 0, maxRainIn = 0, snowIn = 0, fzra = false;
     for (let h = 0; h <= hours; h += 0.5) {
@@ -393,6 +426,25 @@ export class Simulation {
     }
     this.scenarioTargets(this.t); // restore the current narrative note
     return { maxGustMph, maxRainIn, snowIn, fzra };
+  }
+
+  /** Look-ahead over the NWS forecast (live mode). */
+  liveForecast(hours) {
+    if (!this.live.covers(this.t)) return null;
+    let maxGustMph = 0, maxRainIn = 0, snowIn = 0, fzra = false, lowC = Infinity;
+    for (let h = 0; h <= hours; h += 1) {
+      const t = this.t + h * HOUR;
+      if (!this.live.covers(t)) break;
+      const g = this.live.targets(t), rec = this.live.series.find((s) => s.t <= t && t < s.t + HOUR)?.r;
+      maxGustMph = Math.max(maxGustMph, g.gustMs * MPH);
+      maxRainIn = Math.max(maxRainIn, g.precip / IN);
+      lowC = Math.min(lowC, g.tempC);
+      if (rec) snowIn += (rec.snowMm || 0) / 25.4;
+      if (rec && rec.iceMm > 0) fzra = true;
+      if (g.precip > 0.05 && precipType(g.tempC, g.warmNose) === 'fzra') fzra = true;
+    }
+    const refreeze = lowC < 0 && (this.roadIce > 0.2 || this.wx.precip > 0.1 || this.campus.snowCm > 0.5);
+    return { maxGustMph, maxRainIn, snowIn, fzra, refreeze, lowF: lowC * 1.8 + 32, source: 'NWS' };
   }
 
   get campus() {
@@ -426,6 +478,8 @@ export class Simulation {
 
   computeAlerts() {
     const w = this.wx, A = [], gust = w.gustMs * MPH, camp = this.campus;
+    // in live mode, real NWS alerts lead (only while the clock is near the present)
+    if (this.mode === 'live' && Math.abs(this.t - (this.liveNow?.() ?? this.t)) < 6 * HOUR) A.push(...this.live.alerts);
     const month = new Date(this.t).getUTCMonth() + 1;
     const fb = this.gaugeFt(3);
     if (this.riseM(1) > 2.6 && w.precip > 15) A.push({ level: 'extreme', text: 'Flash Flood Emergency' });
@@ -445,7 +499,9 @@ export class Simulation {
     if (fl <= 0) A.push({ level: 'advisory', text: 'Cold Weather Advisory' });
     if (fl >= 100) A.push({ level: 'advisory', text: 'Heat Advisory' });
     if (this.roadIce > 0.6 && camp.tempC < 0 && w.precip < 0.05) A.push({ level: 'advisory', text: 'Black ice on area roads' });
-    return A;
+    // tag the model's own alerts, and drop any that repeat an official NWS alert
+    const official = new Set(A.filter((a) => a.source === 'NWS').map((a) => a.text.replace(/ —.*/, '')));
+    return A.filter((a) => a.source === 'NWS' || !official.has(a.text.replace(/ —.*/, ''))).map((a) => (a.source ? a : { ...a, source: 'model' }));
   }
 
   /** Current conditions on campus and nearby roads → [status, reasons]. */

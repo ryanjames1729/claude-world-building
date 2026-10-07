@@ -2,7 +2,7 @@
 
 A 3D, real-terrain weather and natural-hazards simulation of **Carolina Day School** (Asheville, NC). It works at two levels: a detailed **5-mile core** around campus and a **30-mile region** around it. It covers the French Broad and Swannanoa river valleys, Biltmore Village, the Biltmore Estate, downtown Asheville and the Blue Ridge to the east.
 
-You can run Asheville's normal day-to-day climate, take manual control of the weather, or replay historic-inspired events:
+You can run it on the **live National Weather Service forecast**, run Asheville's normal day-to-day climate, take manual control of the weather, or replay historic-inspired events:
 
 | Scenario | What you'll see |
 |---|---|
@@ -24,6 +24,18 @@ CDS Weather World is a web app. It runs in any modern browser (Chrome, Edge, Saf
 Phones and tablets automatically get a lighter scene, with fewer trees and particles and a lower render resolution, so it stays smooth. On a computer: drag to orbit, right-drag to pan, scroll to zoom, and press **space** to play or pause. On touch screens: one finger orbits, two fingers zoom and pan. The **Controls** and **Conditions** buttons open panels from the bottom of the screen. The camera buttons jump to the campus, the 5-mile overview, Biltmore Village, the French Broad, downtown or a ridge-top view.
 
 Real roads, traffic signals and neighborhood buildings come from a built-in OpenStreetMap snapshot, so the app works offline.
+
+## Live weather (NWS)
+
+On the published site the app opens in **Live (NWS)** mode, which runs on real data:
+- **Forecast:** the National Weather Service gridded forecast for the campus grid square (about 2.5 km), refreshed every hour. It includes temperature, dew point, sky cover, wind and gusts, precipitation amounts, snowfall and ice accumulation, and weather type.
+- **Observations:** the last 48 hours at Asheville Regional Airport (KAVL). The model spins up on these, so snow on the ground, wet soil and river levels are already realistic when it reaches the present. The first hours of the forecast are corrected toward the latest observation.
+- **Rivers:** USGS gauge heights on the French Broad at Asheville (03451500) and the Swannanoa at Biltmore (03451000), refreshed every 15 minutes. The modeled rivers are pinned to them while the clock is near the present.
+- **Alerts:** active NWS alerts for campus, tagged **NWS**. The model's own impact estimates are tagged **model**.
+
+The clock runs in real time. Speed it up to run forward through the forecast (about 7 days), which drives the 8 PM and 5:30 AM calls, power, IT and roads. Past the end of the forecast it falls back to normal climate. **Back to now** returns to the present. Data comes from the free public APIs at api.weather.gov and waterservices.usgs.gov. If they can't be reached, the app says so and falls back to simulated climate. Add `?sim` to the URL to start in simulated climate instead.
+
+This is a planning and teaching tool built on the official forecast. It is only as good as that forecast, and it does not replace NWS products or local judgment.
 
 ## Two levels: the 5-mile core and the 30-mile region
 

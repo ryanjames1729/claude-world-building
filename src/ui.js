@@ -50,7 +50,9 @@ export class UI {
       if (this.sim.mode === 'scenario') this.setMode('auto');
       this.sim.reset(Date.UTC(y, mo - 1, da, h, mi));
     };
-    $('btn-now').onclick = () => { if (this.sim.mode === 'scenario') this.setMode('auto'); this.app.jumpToNow(); };
+    $('btn-now').onclick = () => { if (this.sim.mode === 'live') { this.app.goLive(); return; } if (this.sim.mode === 'scenario') this.setMode('auto'); this.app.jumpToNow(); };
+    $('btn-live-now').onclick = () => this.app.goLive();
+    $('btn-live-refresh').onclick = () => this.app.refreshLive(true);
     $('btn-reset').onclick = () => this.sim.reset(this.sim.t, { soil: this.sim.soil });
     for (const b of document.querySelectorAll('.panel-close')) b.onclick = () => b.closest('.panel').classList.remove('open');
     for (const side of ['left', 'right']) {
@@ -71,9 +73,11 @@ export class UI {
   setMode(mode) {
     for (const b of $('mode-seg').querySelectorAll('button')) b.classList.toggle('on', b.dataset.mode === mode);
     $('scenario-box').hidden = mode !== 'scenario';
+    $('live-box').hidden = mode !== 'live';
     $('manual-box').hidden = mode !== 'manual';
     const hints = {
-      auto: 'Weather is generated from Asheville\'s real climate normals for the date: fronts, showers, summer storms, valley fog and the occasional winter storm.',
+      live: 'Real weather: the National Weather Service forecast for the campus grid square and observations at Asheville Regional Airport (KAVL), with live USGS river gauges. The model spins up on the last 48 hours, then runs forward on the forecast. Real NWS alerts are shown first; model-estimated impacts are labeled "model".',
+      auto: 'Simulated weather (not a forecast): generated from Asheville\'s climate normals for the date for the date: fronts, showers, summer storms, valley fog and the occasional winter storm.',
       manual: 'You control the weather. Try a cold surface with a warm layer aloft to make freezing rain, or crank the rain and watch the creeks, then the rivers, respond.',
       scenario: 'Pick an event to replay. Time jumps to the start of the storm, and impacts build up as it plays.',
     };
@@ -83,12 +87,16 @@ export class UI {
       Object.assign(m, { tempF: Math.round(cToF(w.tempC)), rainInHr: +(w.precip / IN).toFixed(2), windMph: Math.round(w.windMs * MPH), gustMph: Math.round(w.gustMs * MPH), cloud: +w.cloud.toFixed(2), fog: +w.fog.toFixed(2), thunder: +w.thunder.toFixed(2), noseF: Math.round(cToF(w.warmNose)) });
       this.syncManual();
     }
-    if (mode !== 'scenario') { this.sim.setMode(mode); for (const el of document.querySelectorAll('.scenario')) el.classList.remove('on'); }
+    for (const el of document.querySelectorAll('.scenario')) el.classList.remove('on');
+    if (mode === 'live') { this.app.goLive(); return; }
+    this.app.stopLive?.();
+    if (mode !== 'scenario') this.sim.setMode(mode);
   }
 
   loadScenario(id) {
     for (const b of $('mode-seg').querySelectorAll('button')) b.classList.toggle('on', b.dataset.mode === 'scenario');
-    $('scenario-box').hidden = false; $('manual-box').hidden = true;
+    $('scenario-box').hidden = false; $('manual-box').hidden = true; $('live-box').hidden = true;
+    this.app.stopLive?.();
     for (const el of document.querySelectorAll('.scenario')) { el.classList.toggle('on', el.dataset.id === id); el.querySelector('p').hidden = el.dataset.id !== id; }
     this.sim.setMode('scenario', id);
     const s = SCENARIOS.find((x) => x.id === id);
@@ -142,7 +150,7 @@ export class UI {
     const s = this.sim, w = s.wx, c = s.campus;
     $('clock-text').textContent = fmt(s.t);
     const sunTxt = s.sun.elevation > 0 ? `Sun ${s.sun.elevation.toFixed(0)}° up` : 'Night';
-    $('clock-sub').textContent = `${s.mode === 'scenario' ? s.scenario.name : s.mode === 'manual' ? 'Manual weather' : 'Live climate · ' + (w.label || '')} · ${sunTxt}`;
+    $('clock-sub').textContent = `${s.mode === 'scenario' ? s.scenario.name : s.mode === 'manual' ? 'Manual weather' : s.mode === 'live' ? (w.label || 'NWS') : 'Simulated climate · ' + (w.label || '')} · ${sunTxt}`;
 
     // conditions
     $('now-temp').textContent = `${Math.round(cToF(c.tempC))}°`;
@@ -165,7 +173,9 @@ export class UI {
     ].join('');
 
     // alerts
-    $('alerts').innerHTML = s.alerts.length ? s.alerts.map((a) => `<div class="alert ${a.level}">${a.text}</div>`).join('') : '<div class="muted">No active alerts</div>';
+    const live = s.mode === 'live';
+    $('alerts-src').textContent = live ? '(official NWS + model estimates)' : '(simulated)';
+    $('alerts').innerHTML = s.alerts.length ? s.alerts.map((a) => `<div class="alert ${a.level}"${a.headline ? ` title="${a.headline.replace(/"/g, '&quot;')}"` : ''}>${a.source === 'NWS' ? '<span class="src nws">NWS</span>' : live ? '<span class="src">model</span>' : ''}${a.text}</div>`).join('') : '<div class="muted">No active alerts</div>';
     const now = new Set(s.alerts.map((a) => a.text));
     for (const a of s.alerts) if (!this.lastAlerts.has(a.text) && a.level !== 'advisory') this.toast(`⚠️ ${a.text}`, a.level === 'extreme' ? '#ff3d6e' : '#ff8a3d');
     this.lastAlerts = now;
@@ -229,9 +239,9 @@ export class UI {
     };
     $('rivers').innerHTML =
       g('French Broad at Asheville', s.gaugeFt(3), 28, [{ v: 9, t: 'Flood stage (approx.)' }, { v: 24.67, t: 'Helene 2024 record', rec: true }],
-        `Flood stage ≈ 9 ft · Helene crest 24.67 ft · peak this run ${s.peak.fb.toFixed(1)} ft`) +
+        `${this.gaugeObs('03451500')}Flood stage ≈ 9 ft · Helene crest 24.67 ft · peak this run ${s.peak.fb.toFixed(1)} ft`) +
       g('Swannanoa at Biltmore', s.gaugeFt(2), 28, [{ v: 10, t: 'Flood stage (approx.)' }, { v: 26.1, t: 'Helene 2024 crest (approx.)', rec: true }],
-        `Helene crest ≈ 26 ft · peak this run ${s.peak.sw.toFixed(1)} ft`) +
+        `${this.gaugeObs('03451000')}Helene crest ≈ 26 ft · peak this run ${s.peak.sw.toFixed(1)} ft`) +
       g('Small creeks (rise)', s.riseM(0) * 3.281, 12, [{ v: 3, t: 'Flash flooding' }], 'Rise above normal; creeks respond within minutes') +
       g('Larger streams (rise)', s.riseM(1) * 3.281, 18, [{ v: 4.6, t: 'Flooding' }], 'Rise above normal; respond within a few hours');
 
@@ -254,6 +264,16 @@ export class UI {
     if (s.mode === 'scenario' && s.note) { n.hidden = false; n.textContent = s.note; } else n.hidden = true;
     this.drawChart();
   }
+
+  /** "USGS now 3.1 ft (2:45 PM) · " for live mode, or nothing. */
+  gaugeObs(site) {
+    const g = this.sim.mode === 'live' && this.sim.live.gauges[site];
+    if (!g || g.ft == null) return '';
+    const when = g.utc ? new Date(g.utc).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) : '';
+    return `<span class="obs">USGS gauge ${g.ft.toFixed(1)} ft${when ? ` at ${when}` : ''}</span> · `;
+  }
+
+  setLiveStatus(html) { $('live-status').innerHTML = html; }
 
   drawCams(sim) {
     const box = $('cams');

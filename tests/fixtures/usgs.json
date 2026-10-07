@@ -1,0 +1,5 @@
+{"value":{"timeSeries":[
+{"sourceInfo":{"siteCode":[{"value":"03451500"}]},"variable":{"variableCode":[{"value":"00065"}]},"values":[{"value":[{"value":"3.10","dateTime":"2026-01-21T14:30:00.000-05:00"},{"value":"3.12","dateTime":"2026-01-21T14:45:00.000-05:00"}]}]},
+{"sourceInfo":{"siteCode":[{"value":"03451500"}]},"variable":{"variableCode":[{"value":"00060"}]},"values":[{"value":[{"value":"2480","dateTime":"2026-01-21T14:45:00.000-05:00"}]}]},
+{"sourceInfo":{"siteCode":[{"value":"03451000"}]},"variable":{"variableCode":[{"value":"00065"}]},"values":[{"value":[{"value":"3.55","dateTime":"2026-01-21T14:45:00.000-05:00"}]}]}
+]}}

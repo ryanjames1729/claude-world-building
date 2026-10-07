@@ -100,6 +100,15 @@ h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing
 .calls { display: grid; gap: 6px; }
 .call { border-radius: 9px; padding: 7px 9px; background: rgba(255,255,255,.04); }
 .call .when { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.seg button { font-size: 12px; }
+.live-box { margin-top: 8px; padding: 8px 10px; border-radius: 9px; background: rgba(88,180,255,.08); border: 1px solid rgba(88,180,255,.3); }
+.live-box .row { margin-top: 6px; }
+.live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); margin-right: 6px; box-shadow: 0 0 6px var(--ok); }
+.live-dot.stale { background: var(--adv); box-shadow: none; }
+.live-dot.err { background: var(--extreme); box-shadow: none; }
+.alert .src { float: right; font-size: 9.5px; font-weight: 700; padding: 1px 6px; border-radius: 99px; background: rgba(255,255,255,.12); letter-spacing: .04em; }
+.alert .src.nws { background: #2f6db3; color: #fff; }
+.gauge .obs { color: #9fd3ff; }
 .opscard { border-radius: 9px; padding: 7px 9px; margin-bottom: 6px; background: rgba(255,255,255,.04); border-left: 4px solid var(--ok); }
 .opscard.l1 { border-color: var(--adv); background: rgba(245,209,66,.08); }
 .opscard.l2 { border-color: var(--extreme); background: rgba(255,61,110,.12); }
