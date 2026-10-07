@@ -20,6 +20,8 @@ import { createTraffic } from './render/cars.js';
 import { createRegion } from './render/region.js';
 import { REGION_HALF_M } from './geo-region.js';
 import { UI } from './ui.js';
+import { refreshNWS, refreshUSGS } from './sim/live.js';
+import { fromUTC, fmtShort } from './sim/clock.js';
 
 const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
@@ -159,6 +161,9 @@ async function main() {
     togglePlay() { playing = !playing; ui.setPlaying(playing); },
     play(p) { playing = p; ui.setPlaying(playing); },
     jumpToNow() { const d = new Date(); sim.reset(localMs(d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes())); },
+    goLive: () => goLive(),
+    stopLive: () => stopLive(),
+    refreshLive: (manual) => refreshLive(manual),
   };
   const ui = new UI(sim, app);
   if (mobile) document.getElementById('cam-hint').textContent = 'One finger to orbit · two fingers to zoom and pan';
@@ -183,6 +188,60 @@ async function main() {
   });
   sim.on('reset', () => { clearScars(land); forest.reset(); peakStage.fill(0); });
   app.jumpToNow();
+
+  // ---- Live mode: National Weather Service forecast + KAVL observations + USGS river gauges
+  const NWS_EVERY = 60 * 60e3, USGS_EVERY = 15 * 60e3;
+  let liveTimer = null, lastNWS = 0, lastUSGS = 0, liveBusy = false;
+  sim.liveNow = () => fromUTC(Date.now());
+  const fmtT = (u) => (u ? new Date(u).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) : '—');
+  function renderLiveStatus() {
+    const m = sim.live.meta;
+    const stale = m.fetchedAt && Date.now() - m.fetchedAt > 2.5 * NWS_EVERY;
+    const dot = m.error ? 'err' : stale ? 'stale' : '';
+    const ahead = (sim.t - sim.liveNow()) / 3600e3;
+    const where = Math.abs(ahead) < 0.5 ? 'Clock is at the present' : ahead > 0 ? `Clock is ${ahead.toFixed(0)} h ahead, running on the forecast` : `Clock is ${(-ahead).toFixed(0)} h behind the present`;
+    ui.setLiveStatus(m.error
+      ? `<span class="live-dot err"></span>Couldn't reach the weather service (${m.error}). Showing the last data received, or simulated climate if none. Retrying automatically.`
+      : `<span class="live-dot ${dot}"></span><b>NWS forecast</b> for campus (grid ${m.office} ${m.grid}), issued ${fmtT(Date.parse(m.gridUpdated))}<br>`
+        + `KAVL observation ${fmtT(m.obsTime)} · USGS gauges ${fmtT(m.gaugeTime)} · next update ${fmtT((m.fetchedAt || Date.now()) + NWS_EVERY)}<br><span class="muted">${where}. Forecast runs through ${sim.live.end ? fmtShort(sim.live.end - 3600e3) : '—'}.</span>`);
+  }
+  async function refreshLive(manual = false) {
+    if (liveBusy) return;
+    liveBusy = true;
+    const now = Date.now();
+    try {
+      if (manual || now - lastNWS > NWS_EVERY - 30e3) { await refreshNWS(sim.live); lastNWS = now; }
+      if (manual || now - lastUSGS > USGS_EVERY - 30e3) {
+        await refreshUSGS(sim.live).then(() => { lastUSGS = now; if (sim.mode === 'live') sim.assimilateGauges(0.5); }).catch(() => {});
+      }
+      sim.live.meta.error = null;
+      if (manual) ui.toast('Live weather data refreshed', '#58b4ff');
+    } catch (e) {
+      sim.live.meta.error = e.message || 'network error';
+    } finally { liveBusy = false; renderLiveStatus(); }
+  }
+  async function goLive() {
+    ui.setLiveStatus('<span class="live-dot stale"></span>Connecting to the National Weather Service and USGS…');
+    document.getElementById('live-box').hidden = false;
+    lastNWS = lastUSGS = 0;
+    await refreshLive();
+    if (!sim.live.hasData()) { ui.toast('Live weather unavailable right now. Showing simulated climate.', '#ff8a3d'); ui.setMode('auto'); return; }
+    // spin up on the last ~48 h of observations, then hand over to the forecast at the present
+    sim.setMode('live');
+    const nowT = sim.liveNow();
+    let guard = 0;
+    while (sim.t < nowT - 60e3 && guard++ < 400) sim.step(Math.min(0.25, (nowT - sim.t) / 3600e3));
+    sim.assimilateGauges(1); // rivers start the present exactly at the real gauge readings
+    sim.peak.fb = sim.gaugeFt(3); sim.peak.sw = sim.gaugeFt(2);
+    forest.sync(sim.treesDownFrac, U.uTime.value - 5, sim.wx.windDir);
+    app.speed = 0.000277778; document.getElementById('speed').value = '0.000277778';
+    for (const b of document.querySelectorAll('#mode-seg button')) b.classList.toggle('on', b.dataset.mode === 'live');
+    app.play(true);
+    renderLiveStatus();
+    clearInterval(liveTimer);
+    liveTimer = setInterval(() => { if (sim.mode === 'live') { refreshLive(); renderLiveStatus(); } }, 60e3);
+  }
+  function stopLive() { clearInterval(liveTimer); liveTimer = null; }
 
   // ---- OpenStreetMap detail (real roads, signals & buildings): baked into the app, or fetched live if not
   const applyOSM = (osm) => {
@@ -227,7 +286,7 @@ async function main() {
 
   // ---- per-frame visual sync from simulation state
   const sunV = new THREE.Vector3();
-  let wet = 0, lastSync = 0, lastUI = 0;
+  let wet = 0, lastSync = 0, lastUI = 0, lastStatus = 0;
   function syncVisuals(dtReal, simDtH) {
     const w = sim.wx, sun = sim.sun;
     const el = sun.elevation * Math.PI / 180, az = sun.azimuth * Math.PI / 180;
@@ -293,6 +352,8 @@ async function main() {
   ui.setPlaying(playing);
   ui.update();
   flyTo('campus');
+  // on the published website, open in Live (NWS) mode; local files and the offline app start in simulated climate
+  if (location.protocol.startsWith('http') && !/[?&]sim\b/.test(location.search)) setTimeout(() => ui.setMode('live'), 500);
   const hidden = new Set();
   function frame() {
     requestAnimationFrame(frame);
@@ -328,7 +389,7 @@ async function main() {
     traffic.update(sim, dt, layers.cars && layers.roads, U.uNight.value);
     const now = performance.now();
     if (now - lastSync > 300) { lastSync = now; forest.sync(sim.treesDownFrac, U.uTime.value, sim.wx.windDir); region.update(sim, layers.region); }
-    if (now - lastUI > 250) { lastUI = now; ui.update(); }
+    if (now - lastUI > 250) { lastUI = now; ui.update(); if (sim.mode === 'live' && now - lastStatus > 2000) { lastStatus = now; renderLiveStatus(); } }
     hidden.clear();
     if (!layers.roads) hidden.add('road');
     if (!layers.region) hidden.add('region');

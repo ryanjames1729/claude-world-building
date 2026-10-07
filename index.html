@@ -46,9 +46,14 @@
       <section>
         <h3>Weather mode</h3>
         <div class="seg" id="mode-seg">
-          <button data-mode="auto" class="on">Live climate</button>
+          <button data-mode="live" title="Real National Weather Service forecast &amp; observations">Live (NWS)</button>
+          <button data-mode="auto" class="on">Climate</button>
           <button data-mode="manual">Manual</button>
           <button data-mode="scenario">Scenarios</button>
+        </div>
+        <div id="live-box" class="live-box" hidden>
+          <div id="live-status" class="small"></div>
+          <div class="row"><button id="btn-live-now" class="pill">⏱ Back to now</button><button id="btn-live-refresh" class="pill">↻ Refresh data</button></div>
         </div>
         <p class="hint" id="mode-hint">Weather is generated from Asheville's real climate normals for the date: fronts, showers, summer storms, valley fog and the occasional winter storm.</p>
       </section>
@@ -133,7 +138,7 @@
         <div class="grid2" id="now-grid"></div>
       </section>
       <section id="alerts-box">
-        <h3>Alerts <span class="muted small">(simulated)</span></h3>
+        <h3>Alerts <span class="muted small" id="alerts-src">(simulated)</span></h3>
         <div id="alerts"></div>
       </section>
       <section>

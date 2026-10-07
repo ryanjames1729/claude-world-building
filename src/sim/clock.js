@@ -64,3 +64,10 @@ export function moonIllum(t) {
   const phase = ((days % 29.530588) + 29.530588) % 29.530588 / 29.530588;
   return (1 - Math.cos(phase * 2 * Math.PI)) / 2;
 }
+
+/** Real UTC milliseconds → simulation wall-clock (Asheville local time stored as UTC fields). */
+export function fromUTC(u) {
+  let t = u - 4 * HOUR;
+  if (!isDST(t)) t = u - 5 * HOUR;
+  return t;
+}
